@@ -1,21 +1,37 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
 #
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# IconsCustomizer ProGuard/R8 Rules
+# ==================================
+# This module hooks into MIUI Home launcher.
+# R8 must keep everything accessible to the system and LSPosed framework.
+#
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# ---- LSPosed entry point (instantiated by framework via reflection) ----
+-keep class com.ukm.app.iconscustomizer.MainHook { *; }
+-keep class com.ukm.app.iconscustomizer.MainHook$Companion { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# ---- Application & Activities (declared in AndroidManifest.xml) ----
+-keep class com.ukm.app.iconscustomizer.App { *; }
+-keep class com.ukm.app.iconscustomizer.MainActivity { *; }
+-keep class com.ukm.app.iconscustomizer.ColorPickerActivity { *; }
+-keep class com.ukm.app.iconscustomizer.IconPickerActivity { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# ---- Fragments (instantiated by AndroidX / FragmentManager) ----
+-keep class com.ukm.app.iconscustomizer.SettingsFragment { *; }
+-keep class com.ukm.app.iconscustomizer.AllAppsFragment { *; }
+
+# ---- Module logic / helpers (called from MainHook / Activities / Fragments) ----
+-keep class com.ukm.app.iconscustomizer.IconPackHelper { *; }
+-keep class com.ukm.app.iconscustomizer.IconPackHelper$FallbackOverlayInfo { *; }
+-keep class com.ukm.app.iconscustomizer.XposedHelpers { *; }
+-keep class com.ukm.app.iconscustomizer.UIHelpers { *; }
+
+# ---- Kotlin metadata (required for some library features) ----
+-keep class kotlin.Metadata { *; }
+
+# ---- Gson / Kotlin serialization (if used) ----
+
+# ---- Material Components / DynamicColors (consumer POM handles its own rules) ----
+
+# ---- Parcelable (for any custom Parcelable types) ----
+
+# ---- XML / Resources (accessed by resource identifier) ----

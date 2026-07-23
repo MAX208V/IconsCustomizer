@@ -435,7 +435,7 @@ object IconPackHelper {
     ): Drawable? {
         // ===== 方式一（优先）：从 appfilter.xml 读 overlay 定义 =====
         val overlayInfo = parseFallbackOverlayInfo(context, iconPackPackageName)
-        if (overlayInfo != null && overlayInfo.iconBackNames.isNotEmpty()) {
+        if (overlayInfo != null && (overlayInfo.iconBackNames.isNotEmpty() || overlayInfo.iconMaskNames.isNotEmpty())) {
             val result = generateOverlayFallbackIcon(
                 context, iconPackPackageName, originalIcon, overlayInfo
             )
