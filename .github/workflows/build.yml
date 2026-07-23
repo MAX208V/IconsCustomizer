@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   build:
@@ -31,23 +29,37 @@ jobs:
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
-
-      - name: Locate and Upload APK
-        if: success()
+      - name: Build Debug APK (ignore failure)
+        id: build
+        continue-on-error: true
         run: |
-          echo "Looking for APK files..."
-          find app/build -name "*.apk" -type f 2>/dev/null || echo "No APK found"
-          mkdir -p /tmp/apk-output
-          find app/build -name "*.apk" -type f -exec cp {} /tmp/apk-output/ \; 2>/dev/null || true
-          ls -la /tmp/apk-output/
-        shell: bash
+          set -o pipefail
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee build.log
 
-      - name: Upload Debug APK
-        if: success()
+      - name: Show build errors in summary
+        if: always()
+        run: |
+          {
+            echo "# Build Result"
+            echo ""
+            echo '```'
+            grep -E "(ERROR|error:|FAILURE|BUILD FAILED|Could not find|Unresolved|Cannot resolve|not found)" build.log 2>/dev/null | head -30
+            echo ""
+            echo "--- LAST 20 LINES ---"
+            tail -20 build.log 2>/dev/null
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+
+      - name: Upload APK
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: IconsCustomizer-debug
-          path: /tmp/apk-output/
-          if-no-files-found: warn
+          path: app/build/outputs/apk/debug/*.apk
