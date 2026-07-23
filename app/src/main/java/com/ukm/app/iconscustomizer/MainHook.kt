@@ -39,6 +39,7 @@ class MainHook : XposedModule() {
     private var iconPackPackageName: String = "none"
     private var themeHomeScreenOnly: Boolean = false
     private var isThemedIconEnabled: Boolean = false
+    private var isFallbackEnabled: Boolean = false
     private var isThemedClockEnabled: Boolean = false
     private var isThemeDockFolderEnabled: Boolean = false
     private var dockFolderBgColor: Int = 0
@@ -58,6 +59,7 @@ class MainHook : XposedModule() {
         when (packageParam.packageName) {
             "com.miui.home" -> {
                 isThemedIconEnabled = prefManager?.getBoolean("enable_themed_icons", false) ?: false
+                isFallbackEnabled = prefManager?.getBoolean("enable_fallback_icons", true) ?: true
                 isDockEnabled = prefManager?.getBoolean("enable_dock", false) ?: false
                 themeHomeScreenOnly =
                     prefManager?.getBoolean("themed_icons_homescreen_only", false) ?: false
@@ -522,6 +524,19 @@ class MainHook : XposedModule() {
                 if (customDrawable != null) {
                     customDrawable.bounds = originalIcon.bounds
                     return getCustomColoredDrawableIcon(customDrawable)
+                }
+            }
+
+            // ★ 新增：appfilter 中未匹配时，尝试使用通用兜底图标
+            if (isFallbackEnabled) {
+                val fallbackIcon = IconPackHelper.getFallbackIcon(
+                    launcherContext!!,
+                    iconPackPackageName,
+                    originalIcon
+                )
+                if (fallbackIcon != null) {
+                    fallbackIcon.bounds = originalIcon.bounds
+                    return getCustomColoredDrawableIcon(fallbackIcon)
                 }
             }
         }

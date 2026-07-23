@@ -56,6 +56,19 @@
                     android:textSize="16sp" />
 
                 <com.google.android.material.divider.MaterialDivider
+                    android:id="@+id/div_fallback_icons"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switch_fallback_icons"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="16dp"
+                    android:text="Use Generic Icons for Unmapped Apps"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.divider.MaterialDivider
                     android:id="@+id/div_icon_pack"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />

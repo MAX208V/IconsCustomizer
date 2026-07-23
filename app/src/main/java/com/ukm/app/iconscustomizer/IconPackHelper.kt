@@ -4,7 +4,11 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.drawable.AdaptiveIconDrawable
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import android.util.Log
@@ -62,6 +66,9 @@ object IconPackHelper {
 
                 cachedAppFilterMap = iconMap
                 currentIconPack = iconPackPackageName
+                // 清除旧的 overlay 缓存，下一轮会重新解析
+                currentOverlayIconPack = null
+                cachedOverlayInfo = null
 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse appfilter: ${e.message}")
@@ -178,6 +185,234 @@ object IconPackHelper {
         return mutatedIcon
     }
 
+
+    // =========================================================================
+    // FALLBACK / GENERIC ICON SUPPORT
+    // =========================================================================
+
+    /** 通用兜底图标的常见 drawable 命名（按优先级降序） */
+    private val FALLBACK_DRAWABLE_NAMES = arrayOf(
+        "icon", "default", "app", "app_icon", "ic_default", "anonymous", "ic_launcher"
+    )
+
+    @Volatile
+    private var cachedOverlayInfo: FallbackOverlayInfo? = null
+    @Volatile
+    private var currentOverlayIconPack: String? = null
+
+    /**
+     * ADW / Nova Launcher 标准的兜底图标合成信息
+     * 从 appfilter.xml 的 <iconback>/<iconupon>/<iconmask>/<scale> 标签解析
+     */
+    data class FallbackOverlayInfo(
+        val scale: Float,
+        val iconBackNames: List<String>,
+        val iconUponNames: List<String>,
+        val iconMaskNames: List<String>
+    )
+
+    /**
+     * 从图标包直接加载通用兜底 drawable（无需合成）
+     * 尝试多种常见命名，找到第一个就返回
+     */
+    fun loadFallbackDrawable(context: Context, iconPackPackageName: String): Drawable? {
+        for (name in FALLBACK_DRAWABLE_NAMES) {
+            val drawable = loadIcon(context, iconPackPackageName, name)
+            if (drawable != null) {
+                Log.d(TAG, "Found fallback drawable: $name in $iconPackPackageName")
+                return drawable
+            }
+        }
+        return null
+    }
+
+    /**
+     * 解析 appfilter.xml 中的 <iconback> / <iconupon> / <iconmask> / <scale>
+     * 这些标签定义了如何为未适配的应用生成统一风格的兜底图标
+     */
+    fun parseFallbackOverlayInfo(context: Context, iconPackPackageName: String): FallbackOverlayInfo? {
+        synchronized(this) {
+            if (iconPackPackageName == currentOverlayIconPack && cachedOverlayInfo != null) {
+                return cachedOverlayInfo
+            }
+            try {
+                val iconPackContext = context.createPackageContext(
+                    iconPackPackageName, Context.CONTEXT_IGNORE_SECURITY
+                )
+                val resId = iconPackContext.resources.getIdentifier(
+                    "appfilter", "xml", iconPackPackageName
+                )
+                if (resId == 0) return null
+
+                var scale = 0.85f
+                val iconBack = mutableListOf<String>()
+                val iconUpon = mutableListOf<String>()
+                val iconMask = mutableListOf<String>()
+
+                iconPackContext.resources.getXml(resId).use { parser ->
+                    var eventType = parser.eventType
+                    while (eventType != XmlPullParser.END_DOCUMENT) {
+                        if (eventType == XmlPullParser.START_TAG) {
+                            when (parser.name) {
+                                "iconback" -> {
+                                    for (i in 0 until parser.attributeCount) {
+                                        val v = parser.getAttributeValue(i)
+                                        if (!v.isNullOrEmpty()) iconBack.add(v)
+                                    }
+                                }
+                                "iconupon" -> {
+                                    for (i in 0 until parser.attributeCount) {
+                                        val v = parser.getAttributeValue(i)
+                                        if (!v.isNullOrEmpty()) iconUpon.add(v)
+                                    }
+                                }
+                                "iconmask" -> {
+                                    for (i in 0 until parser.attributeCount) {
+                                        val v = parser.getAttributeValue(i)
+                                        if (!v.isNullOrEmpty()) iconMask.add(v)
+                                    }
+                                }
+                                "scale" -> {
+                                    parser.getAttributeValue(null, "factor")?.toFloatOrNull()?.let {
+                                        scale = it.coerceIn(0.1f, 1.5f)
+                                    }
+                                }
+                            }
+                        }
+                        eventType = parser.next()
+                    }
+                }
+
+                val info = FallbackOverlayInfo(
+                    scale = scale,
+                    iconBackNames = iconBack,
+                    iconUponNames = iconUpon,
+                    iconMaskNames = iconMask
+                )
+                cachedOverlayInfo = info
+                currentOverlayIconPack = iconPackPackageName
+                return info
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse fallback overlay info: ${e.message}")
+                return null
+            }
+        }
+    }
+
+    /**
+     * 使用 ADW 标准的 iconback / iconupon / iconmask 机制
+     * 为原始图标合成一个统一风格的兜底图标
+     *
+     * 合成流程：
+     * 1. 绘制 iconback（背景层）
+     * 2. 在中间绘制原始图标（按 scale 缩放，用 iconmask 裁剪）
+     * 3. 绘制 iconupon（前景层）
+     */
+    fun generateOverlayFallbackIcon(
+        context: Context,
+        iconPackPackageName: String,
+        originalIcon: Drawable,
+        overlayInfo: FallbackOverlayInfo
+    ): Drawable? {
+        return try {
+            // 确定合成尺寸
+            val size = if (originalIcon.intrinsicWidth > 0 && originalIcon.intrinsicHeight > 0) {
+                maxOf(originalIcon.intrinsicWidth, originalIcon.intrinsicHeight)
+            } else 192
+
+            // 随机选取各层变体（如果有多个）
+            val backName = overlayInfo.iconBackNames.ifEmpty { null }?.random()
+            val uponName = overlayInfo.iconUponNames.ifEmpty { null }?.random()
+            val maskName = overlayInfo.iconMaskNames.ifEmpty { null }?.random()
+
+            val backDrawable = backName?.let { loadIcon(context, iconPackPackageName, it) }
+            val uponDrawable = uponName?.let { loadIcon(context, iconPackPackageName, it) }
+            val maskDrawable = maskName?.let { loadIcon(context, iconPackPackageName, it) }
+
+            // 没有背景层就没有意义
+            if (backDrawable == null) return null
+
+            // 用 mutate 保护原始 drawable，不修改原对象状态
+            val safeOriginal = originalIcon.mutate()
+
+            // ===== 第一步：将原始图标按 scale 缩放并绘制到位图 =====
+            val factor = overlayInfo.scale
+            val scaledSize = (size * factor).toInt().coerceAtLeast(4)
+            val offset = (size - scaledSize) / 2
+            safeOriginal.setBounds(offset, offset, offset + scaledSize, offset + scaledSize)
+
+            val iconBitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            Canvas(iconBitmap).apply {
+                safeOriginal.draw(this)
+            }
+
+            // ===== 第二步：如果有蒙版，对图标进行裁剪 =====
+            val finalIconBitmap = if (maskDrawable != null) {
+                val maskBitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                Canvas(maskBitmap).apply {
+                    maskDrawable.setBounds(0, 0, size, size)
+                    maskDrawable.draw(this)
+                }
+
+                val clipped = createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                Canvas(clipped).apply {
+                    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+                    // 先画原始图标
+                    drawBitmap(iconBitmap, 0f, 0f, paint)
+                    // 用蒙版裁剪（DST_IN：取目标图像与源图像的交集，保留目标图像的 alpha）
+                    paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+                    drawBitmap(maskBitmap, 0f, 0f, paint)
+                }
+                clipped
+            } else {
+                iconBitmap
+            }
+
+            // ===== 第三步：合成最终结果 =====
+            val resultBitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            Canvas(resultBitmap).apply {
+                // 1. 画背景
+                backDrawable.setBounds(0, 0, size, size)
+                backDrawable.draw(this)
+                // 2. 画裁剪后的图标
+                drawBitmap(finalIconBitmap, 0f, 0f, null)
+                // 3. 画前景
+                uponDrawable?.apply {
+                    setBounds(0, 0, size, size)
+                    draw(this@apply)
+                }
+            }
+
+            BitmapDrawable(context.resources, resultBitmap)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate overlay fallback icon: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * 综合获取兜底图标：
+     * 1. 优先尝试直接加载通用 drawable（如 icon / default 等）
+     * 2. 如果不存在，尝试使用 iconback/iconupon/iconmask 合成
+     * 3. 都失败则返回 null
+     */
+    fun getFallbackIcon(
+        context: Context,
+        iconPackPackageName: String,
+        originalIcon: Drawable
+    ): Drawable? {
+        // 方式一：直接加载通用 drawable
+        val directFallback = loadFallbackDrawable(context, iconPackPackageName)
+        if (directFallback != null) return directFallback
+
+        // 方式二：用 iconback 机制合成
+        val overlayInfo = parseFallbackOverlayInfo(context, iconPackPackageName)
+        if (overlayInfo != null && overlayInfo.iconBackNames.isNotEmpty()) {
+            return generateOverlayFallbackIcon(context, iconPackPackageName, originalIcon, overlayInfo)
+        }
+
+        return null
+    }
 
     fun putColorIntoDrawable(
         context: Context,

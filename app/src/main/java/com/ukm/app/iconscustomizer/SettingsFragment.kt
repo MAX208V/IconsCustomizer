@@ -38,6 +38,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
     private var installedIconPacks = listOf<IconPackInfo>()
     lateinit var switchEnableTheming: MaterialSwitch
     lateinit var switchHomescreenOnly: MaterialSwitch
+    lateinit var switchFallbackIcons: MaterialSwitch
     lateinit var rowIconPack: LinearLayout
     lateinit var rowApplyCustom: LinearLayout
     lateinit var sliderIconSize: Slider
@@ -113,6 +114,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
     private fun setupInteractions(view: View) {
         switchEnableTheming = view.findViewById(R.id.switch_enable_theming)
         switchHomescreenOnly = view.findViewById(R.id.switch_homescreen_only)
+        switchFallbackIcons = view.findViewById(R.id.switch_fallback_icons)
         rowIconPack = view.findViewById(R.id.row_icon_pack)
         rowApplyCustom = view.findViewById(R.id.row_apply_custom)
         sliderIconSize = view.findViewById(R.id.slider_icon_size)
@@ -130,6 +132,14 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
             if (isUpdatingUI) return@setOnCheckedChangeListener
             if (mService != null) {
                 UIHelpers.pushRemotePref("themed_icons_homescreen_only", isChecked)
+                UIHelpers.restartLauncher(requireContext())
+            }
+        }
+
+        switchFallbackIcons.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingUI) return@setOnCheckedChangeListener
+            if (mService != null) {
+                UIHelpers.pushRemotePref("enable_fallback_icons", isChecked)
                 UIHelpers.restartLauncher(requireContext())
             }
         }
@@ -315,6 +325,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
 
         switchEnableTheming.isChecked = isThemingEnabled
         switchHomescreenOnly.isChecked = prefs.getBoolean("themed_icons_homescreen_only", false)
+        switchFallbackIcons.isChecked = prefs.getBoolean("enable_fallback_icons", true)
         switchMonet.isChecked = isMonetCustomization
         switchEnableDock.isChecked = prefs.getBoolean("enable_dock", false)
         switchEnableMonetDockFolder.isChecked = isThemeDockFolder
@@ -341,6 +352,8 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         val vTheming = if (isThemingEnabled) View.VISIBLE else View.GONE
         switchHomescreenOnly.visibility = vTheming
         view.findViewById<View>(R.id.div_homescreen_only).visibility = vTheming
+        switchFallbackIcons.visibility = vTheming
+        view.findViewById<View>(R.id.div_fallback_icons).visibility = vTheming
         view.findViewById<View>(R.id.row_icon_pack).visibility = vTheming
         view.findViewById<View>(R.id.div_icon_pack).visibility = vTheming
         view.findViewById<View>(R.id.title_monet_colors).visibility = vTheming
