@@ -25,62 +25,29 @@ jobs:
 
       - name: Setup Android SDK
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          # Accept licenses
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>&1 || true
-          # List installed
-          echo "=== Currently installed ==="
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed 2>&1 || true
-          # Install required components
-          echo "=== Installing platform & build-tools ==="
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" 2>&1 || true
-          echo "=== After install ==="
-          ls -la $ANDROID_HOME/platforms/
-          ls -la $ANDROID_HOME/build-tools/
 
       - name: Create local.properties
-        run: |
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ls -la $ANDROID_HOME/platforms/
-          echo "sdk.dir=$ANDROID_HOME" >> $GITHUB_STEP_SUMMARY
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - name: Build Debug APK
-        id: build
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee build.log
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Check build result
-        if: always()
+      - name: Locate and Upload APK
+        if: success()
         run: |
-          if [ -f build.log ]; then
-            echo "## Build Log Summary" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            # Extract error lines
-            grep -n "ERROR\|error:\|FAILURE\|Could not\|not found\|Unresolved\|Failed to\|BUILD FAILED" build.log | tail -50 >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            # Also show the last 30 lines
-            echo "## Last 30 lines" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -30 build.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "Build exit code: ${{ steps.build.outcome }}"
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-          if-no-files-found: warn
+          echo "Looking for APK files..."
+          find app/build -name "*.apk" -type f 2>/dev/null || echo "No APK found"
+          mkdir -p /tmp/apk-output
+          find app/build -name "*.apk" -type f -exec cp {} /tmp/apk-output/ \; 2>/dev/null || true
+          ls -la /tmp/apk-output/
+        shell: bash
 
       - name: Upload Debug APK
-        if: steps.build.outcome == 'success'
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: IconsCustomizer-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          path: /tmp/apk-output/
+          if-no-files-found: warn
