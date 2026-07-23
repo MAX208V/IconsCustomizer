@@ -29,36 +29,25 @@ jobs:
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
-      - name: Build Debug APK (ignore failure)
-        id: build
+      - name: Check Gradle configuration
         continue-on-error: true
         run: |
-          set -o pipefail
-          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee build.log
+          ./gradlew tasks --no-daemon --info 2>&1 | tee gradle_config.log
+          grep -i "error\|failure\|not found\|could not" gradle_config.log | head -20 || echo "No obvious errors found"
 
-      - name: Show build errors in summary
-        if: always()
+      - name: Check dependencies
+        continue-on-error: true
         run: |
-          {
-            echo "# Build Result"
-            echo ""
-            echo '```'
-            grep -E "(ERROR|error:|FAILURE|BUILD FAILED|Could not find|Unresolved|Cannot resolve|not found)" build.log 2>/dev/null | head -30
-            echo ""
-            echo "--- LAST 20 LINES ---"
-            tail -20 build.log 2>/dev/null
-            echo '```'
-          } >> $GITHUB_STEP_SUMMARY
+          echo "=== compileOnly deps ==="
+          ./gradlew dependencies --no-daemon --configuration compileOnly 2>&1 | tail -30
+          echo "=== implementation deps ==="
+          ./gradlew dependencies --no-daemon --configuration implementation 2>&1 | tail -30
 
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
-        if: steps.build.outcome == 'success'
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: IconsCustomizer-debug
