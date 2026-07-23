@@ -525,7 +525,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                     gravity = android.view.Gravity.CENTER_VERTICAL
                     setPadding(dpToPx(16f).toInt(), dpToPx(10f).toInt(), dpToPx(16f).toInt(), dpToPx(10f).toInt())
                     background = if (idx == selectedIndex[0])
-                        ContextCompat.getDrawable(requireContext(), com.google.android.material.R.drawable.selector_button)?.mutate()
+                        GradientDrawable().apply { setColor(Color.parseColor("#18000000")); cornerRadius = dpToPx(8f) }
                     else null
                     isClickable = true
                     isFocusable = true
@@ -539,7 +539,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                     text = if (idx == selectedIndex[0]) "●" else "○"
                     textSize = 16f
                     setTextColor(if (idx == selectedIndex[0]) ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_dynamic_primary50)
-                        else ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_on_surface_emphasis_medium_type))
+                        else Color.parseColor("#888888"))
                     layoutParams = LinearLayout.LayoutParams(dpToPx(28f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
                 })
                 // APK 图标（None 时无图标）
