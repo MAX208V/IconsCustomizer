@@ -189,7 +189,8 @@ class IconPickerActivity : AppCompatActivity() {
                 }
             }
 
-            for ((idx, (pkg, label, matchedIcon)) in chipData.withIndex()) {
+            for (idx in chipData.indices) {
+                val (pkg, label, matchedIcon) = chipData[idx]
                 val chip = Chip(this@IconPickerActivity).apply {
                     text = label
                     isCheckable = true
