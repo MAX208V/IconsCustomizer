@@ -26,33 +26,30 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install extra SDK components if needed
+      - name: Check SDK and create local.properties
         run: |
-          echo "=== Android SDK Info ==="
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo ""
-          echo "=== Installed platforms ==="
-          ls -la $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms dir"
-          echo ""
-          echo "=== Installed build-tools ==="
-          ls -la $ANDROID_HOME/build-tools/ 2>/dev/null || echo "No build-tools dir"
-          echo ""
-          echo "=== cmdline-tools ==="
-          ls -la $ANDROID_HOME/cmdline-tools/ 2>/dev/null || echo "No cmdline-tools dir"
-          echo ""
-          echo "=== Accept licenses ==="
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>&1 || true
-
-      - name: Create local.properties
-        run: |
+          ls -la $ANDROID_HOME/platforms/ 2>/dev/null || echo "NO PLATFORMS"
+          ls -la $ANDROID_HOME/build-tools/ 2>/dev/null || echo "NO BUILD-TOOLS"
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           cat local.properties
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee build.log
+
+      - name: Upload build log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: warn
 
       - name: Upload Debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: IconsCustomizer-debug
