@@ -35,10 +35,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 
 class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
 
-    private lateinit var iconPackPackage: String
+    private lateinit var iconPackList: List<String>
     private lateinit var adapter: AppAdapter
     private var allApps = listOf<AppInfo>()
     private var appFilterMap: Map<String, String> = emptyMap()
@@ -46,6 +47,17 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
 
     private fun getPrefs(): SharedPreferences {
         return requireContext().getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+    }
+
+    private fun loadPackList(): List<String> {
+        // 先从参数读取，参数不存在则从偏好读取
+        val json = arguments?.getString("EXTRA_ICON_PACK_LIST") ?: getPrefs().getString("icon_pack_list", null)
+        if (!json.isNullOrEmpty()) {
+            try { return JSONArray(json).let { (0 until it.length()).map { i -> it.getString(i) } } } catch (_: Exception) {}
+        }
+        // 向后兼容
+        val single = arguments?.getString("EXTRA_ICON_PACK") ?: getPrefs().getString("icon_pack", "none")
+        return if (single != null && single != "none") listOf(single) else emptyList()
     }
 
     data class AppInfo(
@@ -58,12 +70,13 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val toolbar = requireActivity().findViewById<MaterialToolbar>(R.id.materialToolbar)
-        toolbar.title = "Apply Custom Icon"
+        toolbar.title = getString(R.string.apply_custom_icon_title)
         val searchEditText =
             view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.searchAppEditText)
         val recyclerView = view.findViewById<RecyclerView>(R.id.appRecyclerView)
-        iconPackPackage = arguments?.getString("EXTRA_ICON_PACK")
-            ?: getPrefs().getString("icon_pack", "none").toString()
+        iconPackList = loadPackList()
+        if (iconPackList.isEmpty()) { toolbar.title = getString(R.string.icon_pack_none); return }
+
         showThemedIcons = getPrefs().getBoolean("preview_themed_icons", true)
         recyclerView.layoutManager =
             LinearLayoutManager(requireContext())
@@ -76,7 +89,7 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
                     Menu.NONE,
                     101,
                     Menu.NONE,
-                    "Show Themed Icons"
+                    getString(R.string.show_themed_icons)
                 )
                 toggleItem.isCheckable = true
                 toggleItem.isChecked = showThemedIcons
@@ -100,8 +113,11 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
         }, viewLifecycleOwner, Lifecycle.State.RESUMED)
 
         viewLifecycleOwner.lifecycleScope.launch {
-            appFilterMap = withContext(Dispatchers.IO) {
-                IconPackHelper.getAppFilterMap(requireContext(), iconPackPackage)
+            val firstPack = iconPackList.firstOrNull()
+            if (firstPack != null) {
+                appFilterMap = withContext(Dispatchers.IO) {
+                    IconPackHelper.getAppFilterMap(requireContext(), firstPack)
+                }
             }
             allApps = withContext(Dispatchers.IO) { loadInstalledApps() }
             adapter.updateData(allApps)
@@ -196,31 +212,29 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
             val app = filteredApps[position]
             holder.appName.text = app.name
 
-            val manualIcon = prefs.getString(
-                "custom_icon_${iconPackPackage}_${app.componentString}",
-                null
-            )
+            // 检查所有图标包的手动覆盖
+            var manualIcon: String? = null
+            for (pkg in iconPackList) {
+                val m = prefs.getString("custom_icon_${pkg}_${app.componentString}", null)
+                if (!m.isNullOrEmpty()) { manualIcon = m; break }
+            }
 
-            var targetDrawableName = manualIcon
-
+            var targetDrawableName = manualIcon ?: appFilterMap[app.componentString]
             if (targetDrawableName == null) {
-                targetDrawableName = appFilterMap[app.componentString]
-                if (targetDrawableName == null) {
-                    val packagePrefix = "ComponentInfo{${app.packageName}/"
-                    targetDrawableName =
-                        appFilterMap.entries.firstOrNull { it.key.startsWith(packagePrefix) }?.value
-                }
+                val packagePrefix = "ComponentInfo{${app.packageName}/"
+                targetDrawableName =
+                    appFilterMap.entries.firstOrNull { it.key.startsWith(packagePrefix) }?.value
             }
 
             if (manualIcon != null) {
-                holder.appAssignedIcon.text = "Custom override: $manualIcon"
-                holder.appAssignedIcon.setTextColor("#4CAF50".toColorInt())
+                holder.appAssignedIcon.text = getString(R.string.custom_override, manualIcon)
+                holder.appAssignedIcon.setTextColor(0xFF4CAF50.toInt())
             } else if (targetDrawableName != null) {
-                holder.appAssignedIcon.text = "Using default pack icon"
-                holder.appAssignedIcon.setTextColor("#888888".toColorInt())
+                holder.appAssignedIcon.text = getString(R.string.default_pack_icon)
+                holder.appAssignedIcon.setTextColor(0xFF888888.toInt())
             } else {
-                holder.appAssignedIcon.text = "Unthemed / Stock"
-                holder.appAssignedIcon.setTextColor("#E53935".toColorInt())
+                holder.appAssignedIcon.text = getString(R.string.unthemed_stock)
+                holder.appAssignedIcon.setTextColor(0xFFE53935.toInt())
             }
 
             if (!isThemedMode) {
@@ -240,7 +254,7 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
                             val finalDrawable = withContext(Dispatchers.IO) {
                                 val rawDrawable = IconPackHelper.loadIcon(
                                     adapterContext,
-                                    iconPackPackage,
+                                    iconPackList.firstOrNull() ?: "",
                                     targetDrawableName
                                 )
 
@@ -282,7 +296,7 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
 
         private fun openIconPicker(app: AppInfo) {
             val pickIntent = Intent(adapterContext, IconPickerActivity::class.java).apply {
-                putExtra("EXTRA_ICON_PACK", iconPackPackage)
+                putExtra("EXTRA_ICON_PACK_LIST", JSONArray(iconPackList).toString())
                 putExtra("EXTRA_APP_NAME", app.name)
                 putExtra("EXTRA_COMPONENT_STRING", app.componentString)
             }

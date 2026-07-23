@@ -66,6 +66,7 @@
                     android:src="@mipmap/ic_launcher_round" />
 
                 <TextView
+                    android:id="@+id/currentLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
@@ -100,6 +101,16 @@
             android:inputType="text"
             android:paddingVertical="16dp" />
     </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.chip.ChipGroup
+        android:id="@+id/packChipGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        app:chipSpacingHorizontal="8dp"
+        app:singleLine="true" />
 
     <FrameLayout
         android:layout_width="match_parent"

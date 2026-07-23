@@ -167,11 +167,10 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         rowApplyCustom.setOnClickListener {
             val prefs = getRemotePrefs()
             val packs = getIconPackList(prefs)
-            val firstPack = packs.firstOrNull()
-            if (firstPack != null) {
+            if (packs.isNotEmpty()) {
                 val fragment = AllAppsFragment().apply {
                     arguments = Bundle().apply {
-                        putString("EXTRA_ICON_PACK", firstPack)
+                        putString("EXTRA_ICON_PACK_LIST", JSONArray(packs).toString())
                     }
                 }
                 requireActivity().supportFragmentManager.beginTransaction()
@@ -372,7 +371,40 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                 val row = LinearLayout(requireContext()).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = android.view.Gravity.CENTER_VERTICAL
-                    setPadding(dpToPx(4f).toInt(), dpToPx(8f).toInt(), 0, dpToPx(8f).toInt())
+                    setPadding(dpToPx(4f).toInt(), dpToPx(6f).toInt(), 0, dpToPx(6f).toInt())
+                }
+                // 上移按钮
+                if (idx > 0) {
+                    row.addView(TextView(requireContext()).apply {
+                        text = "▲"
+                        textSize = 14f
+                        setPadding(dpToPx(8f).toInt(), dpToPx(4f).toInt(), dpToPx(8f).toInt(), dpToPx(4f).toInt())
+                        setTextColor(ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_dynamic_primary50))
+                        setOnClickListener {
+                            val item = packs.removeAt(idx)
+                            packs.add(idx - 1, item)
+                            refreshPackList()
+                        }
+                    })
+                } else {
+                    // 占位
+                    row.addView(TextView(requireContext()).apply {
+                        layoutParams = LinearLayout.LayoutParams(dpToPx(32f).toInt(), 0)
+                    })
+                }
+                // 下移按钮
+                if (idx < packs.size - 1) {
+                    row.addView(TextView(requireContext()).apply {
+                        text = "▼"
+                        textSize = 14f
+                        setPadding(dpToPx(4f).toInt(), dpToPx(4f).toInt(), dpToPx(8f).toInt(), dpToPx(4f).toInt())
+                        setTextColor(ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_dynamic_primary50))
+                        setOnClickListener {
+                            val item = packs.removeAt(idx)
+                            packs.add(idx + 1, item)
+                            refreshPackList()
+                        }
+                    })
                 }
                 // APK icon
                 row.addView(createPackIconView(pkg).apply {
@@ -400,9 +432,9 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                 // Remove button
                 row.addView(TextView(requireContext()).apply {
                     text = getString(R.string.remove_icon_pack)
-                    textSize = 13f
+                    textSize = 12f
                     setTextColor(ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_dynamic_primary50))
-                    setPadding(dpToPx(12f).toInt(), dpToPx(6f).toInt(), dpToPx(12f).toInt(), dpToPx(6f).toInt())
+                    setPadding(dpToPx(8f).toInt(), dpToPx(4f).toInt(), dpToPx(8f).toInt(), dpToPx(4f).toInt())
                     setOnClickListener {
                         packs.removeAt(idx)
                         refreshPackList()

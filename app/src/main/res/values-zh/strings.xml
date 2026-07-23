@@ -51,6 +51,14 @@
     <string name="custom_override">自定义覆盖：%s</string>
     <string name="default_pack_icon">使用默认图标包图标</string>
     <string name="unthemed_stock">未主题 / 原生</string>
+    <string name="icon_picker_title">选择图标</string>
+    <string name="search_icons">搜索图标…</string>
+    <string name="currently_theming">正在主题化</string>
+    <string name="current_label">当前</string>
+    <string name="icon_reset">图标已恢复默认</string>
+    <string name="reset_default">恢复默认图标</string>
+    <string name="icon_set">已设置：%1$s（%2$s）</string>
+    <string name="all_packs_added">所有图标包已添加</string>
 
     <!-- 通用 -->
     <string name="done">完成</string>

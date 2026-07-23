@@ -1,14 +1,14 @@
 package com.ukm.app.iconscustomizer
 
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.util.LruCache
 import android.view.LayoutInflater
-import android.view.Menu
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -24,21 +24,34 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
-import kotlinx.coroutines.CoroutineScope
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 
 class IconPickerActivity : AppCompatActivity() {
 
-    private lateinit var iconPackPackage: String
+    companion object {
+        private const val TAG = "UKMTAG"
+    }
+
+    /** 图标条目：包含图标所在的包和 drawable 名称 */
+    data class IconEntry(
+        val pack: String,
+        val drawableName: String,
+        val packLabel: String
+    )
+
     private lateinit var appName: String
-    private lateinit var currentIconImage: ImageView
     private lateinit var componentString: String
     private lateinit var adapter: IconGridAdapter
-    private val allAvailableIcons = mutableListOf<String>()
+    private val allEntries = mutableListOf<IconEntry>()
+    private val activePacks = mutableSetOf<String>()
+    private var iconPackList: List<String> = emptyList()
+    private var packLabels: Map<String, String> = emptyMap()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,208 +64,282 @@ class IconPickerActivity : AppCompatActivity() {
         }
         val materialToolbar = findViewById<MaterialToolbar>(R.id.materialToolbar)
         setSupportActionBar(materialToolbar)
-        iconPackPackage = intent.getStringExtra("EXTRA_ICON_PACK") ?: return finish()
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        materialToolbar.setNavigationOnClickListener { finish() }
+
+        // 读取传入参数
+        val packsJson = intent.getStringExtra("EXTRA_ICON_PACK_LIST") ?: return finish()
+        iconPackList = try {
+            JSONArray(packsJson).let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }
+            }
+        } catch (_: Exception) { return finish() }
+
         appName = intent.getStringExtra("EXTRA_APP_NAME") ?: "App"
         componentString = intent.getStringExtra("EXTRA_COMPONENT_STRING") ?: ""
 
-        currentIconImage = findViewById(R.id.currentIconImage)
+        // 建立包名→标签映射
+        packLabels = iconPackList.associateWith { getPackLabel(it) }
+
+        // UI 初始化
+        val currentIconImage = findViewById<ImageView>(R.id.currentIconImage)
         val appNameTextView = findViewById<TextView>(R.id.themingAppName)
         val recyclerView = findViewById<RecyclerView>(R.id.iconRecyclerView)
         val spinner = findViewById<ProgressBar>(R.id.loadingSpinner)
         val searchBox = findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.searchIconEditText)
+        val chipGroup = findViewById<ChipGroup>(R.id.packChipGroup)
+        findViewById<TextView>(R.id.themingTitle).text = getString(R.string.currently_theming)
+        findViewById<TextView>(R.id.currentLabel).text = getString(R.string.current_label)
+        searchBox.hint = getString(R.string.search_icons)
+
         appNameTextView.text = appName
-
-        lifecycleScope.launch {
-            loadCurrentIcon(currentIconImage)
-        }
-
-        recyclerView.layoutManager = GridLayoutManager(this, 4)
+        recyclerView.layoutManager = GridLayoutManager(this, 3)
         adapter = IconGridAdapter(emptyList())
         recyclerView.adapter = adapter
 
+        // 先加载当前图标
+        lifecycleScope.launch { loadCurrentIcon(currentIconImage) }
+
+        // 异步加载所有图标包的全部图标
         lifecycleScope.launch {
-            val icons = withContext(Dispatchers.IO) {
-                IconPackHelper.getAllIconsFromPack(this@IconPickerActivity, iconPackPackage)
-            }
-            allAvailableIcons.addAll(icons)
+            val allIcons = withContext(Dispatchers.IO) { loadAllEntries() }
+            allEntries.addAll(allIcons)
+            activePacks.addAll(iconPackList)
             spinner.visibility = View.GONE
-            adapter.updateData(allAvailableIcons)
+
+            // 构建 Chip 筛选栏
+            buildChips(chipGroup)
+            adapter.updateData(allEntries)
         }
 
         searchBox.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                adapter.filter(s.toString())
-            }
+            override fun afterTextChanged(s: Editable?) { adapter.filter(s.toString()) }
         })
     }
 
-    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+    override fun onCreateOptionsMenu(menu: android.view.Menu?): Boolean {
         menuInflater.inflate(R.menu.icon_picker_menu, menu)
         return true
     }
 
-    private suspend fun loadCurrentIcon(imageView: ImageView) {
-        val prefs = App.mService?.getRemotePreferences(MainActivity.PREF_NAME)
-            ?: getSharedPreferences(MainActivity.PREF_NAME, MODE_PRIVATE)
-        val manualIcon = prefs.getString("custom_icon_${iconPackPackage}_$componentString", null)
-        var targetDrawableName = manualIcon
-        if (targetDrawableName == null) {
-            val appFilterMap = withContext(Dispatchers.IO) {
-                IconPackHelper.getAppFilterMap(this@IconPickerActivity, iconPackPackage)
-            }
-            targetDrawableName = appFilterMap[componentString]
-            if (targetDrawableName == null) {
-                val pkgName = componentString.substringAfter("{").substringBefore("/")
-                val packagePrefix = "ComponentInfo{$pkgName/"
-                targetDrawableName =
-                    appFilterMap.entries.firstOrNull { it.key.startsWith(packagePrefix) }?.value
-            }
-        }
-        if (targetDrawableName != null) {
-            val loadedDrawable = withContext(Dispatchers.IO) {
-                IconPackHelper.loadIcon(
-                    this@IconPickerActivity,
-                    iconPackPackage,
-                    targetDrawableName
-                )
-            }
-            if (loadedDrawable != null) {
-                imageView.setImageDrawable(loadedDrawable)
-            } else {
-                loadStockAppIcon(imageView)
-            }
-        } else {
-            loadStockAppIcon(imageView)
-        }
-    }
-
-    private fun loadStockAppIcon(imageView: ImageView) {
-        try {
-            val pkgName = componentString.substringAfter("{").substringBefore("/")
-            val icon = packageManager.getApplicationIcon(pkgName)
-            imageView.setImageDrawable(icon)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
         return when (item.itemId) {
             R.id.menuResetDefault -> {
-                resetIconToDefault()
-                UIHelpers.restartLauncher(this)
-                true
+                resetIconToDefault(); true
             }
             else -> super.onOptionsItemSelected(item)
         }
     }
 
+    // ====================================================================
+    // 数据加载
+    // ====================================================================
+
+    /** 从所有配置的图标包加载全部图标 */
+    private fun loadAllEntries(): List<IconEntry> {
+        val result = mutableListOf<IconEntry>()
+        for (pkg in iconPackList) {
+            try {
+                val icons = IconPackHelper.getAllIconsFromPack(this, pkg)
+                val label = packLabels[pkg] ?: pkg
+                for (name in icons) {
+                    result.add(IconEntry(pkg, name, label))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load icons from $pkg: ${e.message}")
+            }
+        }
+        return result
+    }
+
+    /** 获取图标包的显示名称 */
+    private fun getPackLabel(packageName: String): String {
+        return try {
+            val pm = packageManager
+            val ai = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(ai).toString()
+        } catch (_: Exception) { packageName }
+    }
+
+    // ====================================================================
+    // Chip 筛选栏
+    // ====================================================================
+
+    private fun buildChips(chipGroup: ChipGroup) {
+        chipGroup.removeAllViews()
+        if (iconPackList.size <= 1) return
+        chipGroup.visibility = View.VISIBLE
+
+        for (pkg in iconPackList) {
+            val label = packLabels[pkg] ?: pkg
+            val chip = Chip(this).apply {
+                text = label
+                isCheckable = true
+                isChecked = true
+                setOnCheckedChangeListener { _, isChecked ->
+                    if (isChecked) activePacks.add(pkg)
+                    else activePacks.remove(pkg)
+                    adapter.filterActivePacks(activePacks)
+                }
+            }
+            chipGroup.addView(chip)
+        }
+    }
+
+    // ====================================================================
+    // 当前图标加载
+    // ====================================================================
+
+    private suspend fun loadCurrentIcon(imageView: ImageView) {
+        val prefs = App.mService?.getRemotePreferences(MainActivity.PREF_NAME)
+            ?: getSharedPreferences(MainActivity.PREF_NAME, MODE_PRIVATE)
+
+        // 检查所有图标包的手动覆盖
+        for (pkg in iconPackList) {
+            val manualKey = "custom_icon_${pkg}_$componentString"
+            val drawableName = prefs.getString(manualKey, null)
+            if (!drawableName.isNullOrEmpty()) {
+                val d = withContext(Dispatchers.IO) {
+                    IconPackHelper.loadIcon(this@IconPickerActivity, pkg, drawableName)
+                }
+                if (d != null) { imageView.setImageDrawable(d); return }
+            }
+        }
+
+        // 找第一个匹配的图标包
+        for (pkg in iconPackList) {
+            val map = withContext(Dispatchers.IO) {
+                IconPackHelper.getAppFilterMap(this@IconPickerActivity, pkg)
+            }
+            val dn = map[componentString] ?: map.entries.firstOrNull {
+                it.key.startsWith("ComponentInfo{${componentString.substringAfter("{").substringBefore("/")}/")
+            }?.value
+            if (dn != null) {
+                val d = withContext(Dispatchers.IO) {
+                    IconPackHelper.loadIcon(this@IconPickerActivity, pkg, dn)
+                }
+                if (d != null) { imageView.setImageDrawable(d); return }
+            }
+        }
+
+        // 回退到原生图标
+        loadStockAppIcon(imageView)
+    }
+
+    private fun loadStockAppIcon(imageView: ImageView) {
+        try {
+            val pkgName = componentString.substringAfter("{").substringBefore("/")
+            imageView.setImageDrawable(packageManager.getApplicationIcon(pkgName))
+        } catch (_: Exception) {}
+    }
+
+    // ====================================================================
+    // 保存 / 重置
+    // ====================================================================
+
+    private fun saveIconChoice(entry: IconEntry) {
+        val manualOverrideKey = "custom_icon_${entry.pack}_$componentString"
+        UIHelpers.pushLocalPref(this, manualOverrideKey, entry.drawableName)
+        UIHelpers.pushRemotePref(manualOverrideKey, entry.drawableName)
+        Toast.makeText(this, "已设置: ${entry.drawableName} (${entry.packLabel})", Toast.LENGTH_SHORT).show()
+        finish()
+    }
 
     private fun resetIconToDefault() {
         val remotePrefs = App.mService?.getRemotePreferences(MainActivity.PREF_NAME)
             ?: getSharedPreferences(MainActivity.PREF_NAME, MODE_PRIVATE)
-        val prefKey = "custom_icon_${iconPackPackage}_$componentString"
-        remotePrefs.edit {
-            remove(prefKey)
-        }
         val localPrefs = getSharedPreferences(MainActivity.PREF_NAME, MODE_PRIVATE)
-        localPrefs.edit(commit = true) {
-            remove(prefKey)
+
+        for (pkg in iconPackList) {
+            val key = "custom_icon_${pkg}_$componentString"
+            remotePrefs.edit { remove(key) }
+            localPrefs.edit(commit = true) { remove(key) }
         }
-        Toast.makeText(this, "Icon reset to default!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "图标已恢复默认", Toast.LENGTH_SHORT).show()
         finish()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::adapter.isInitialized) {
-            adapter.cleanUp()
-        }
+        if (::adapter.isInitialized) adapter.cleanUp()
     }
 
-    private fun saveIconChoice(chosenDrawableName: String) {
-        val manualOverrideKey = "custom_icon_${iconPackPackage}_$componentString"
-        UIHelpers.pushLocalPref(this, manualOverrideKey, chosenDrawableName)
-        UIHelpers.pushRemotePref(manualOverrideKey, chosenDrawableName)
-        finish()
-    }
+    // ====================================================================
+    // 适配器
+    // ====================================================================
 
-    inner class IconGridAdapter(private var displayedIcons: List<String>) :
-        RecyclerView.Adapter<IconGridAdapter.IconViewHolder>() {
+    inner class IconGridAdapter(private var displayed: List<IconEntry>) :
+        RecyclerView.Adapter<IconGridAdapter.ViewHolder>() {
 
-        private val adapterScope = CoroutineScope(Dispatchers.Main + Job())
-        private val memoryCache = LruCache<String, Drawable>(200)
+        private val scope = java.util.concurrent.Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+        private val cache = LruCache<String, Drawable>(200)
+        private val jobs = mutableMapOf<String, Job>()
 
-        inner class IconViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val iconImage: ImageView = view.findViewById(R.id.singleIconImage)
-            var currentJob: Job? = null // Track the specific job for this cell!
+            val iconName: TextView = view.findViewById(R.id.iconName)
+            val packLabel: TextView = view.findViewById(R.id.iconPackLabel)
         }
 
-        override fun onViewRecycled(holder: IconViewHolder) {
-            super.onViewRecycled(holder)
-            holder.currentJob?.cancel()
-            holder.iconImage.setImageDrawable(null)
+        override fun onCreateViewHolder(parent: ViewGroup, type: Int): ViewHolder {
+            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_icon, parent, false)
+            return ViewHolder(v)
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): IconViewHolder {
-            val view =
-                LayoutInflater.from(parent.context).inflate(R.layout.item_icon, parent, false)
-            return IconViewHolder(view)
-        }
+        override fun getItemCount(): Int = displayed.size
 
-        override fun getItemCount(): Int = displayedIcons.size
+        @SuppressLint("SetTextI18n")
+        override fun onBindViewHolder(h: ViewHolder, pos: Int) {
+            val entry = displayed[pos]
+            h.iconName.text = entry.drawableName
+            h.packLabel.text = entry.packLabel
 
-        override fun onBindViewHolder(holder: IconViewHolder, position: Int) {
-            val drawableName = displayedIcons[position]
+            jobs[entry.drawableName]?.cancel()
+            h.iconImage.tag = entry.drawableName
+            h.iconImage.setImageDrawable(null)
 
-            holder.currentJob?.cancel()
-
-            holder.iconImage.tag = drawableName
-            holder.iconImage.setImageDrawable(null)
-
-            val cachedIcon = memoryCache.get(drawableName)
-            if (cachedIcon != null) {
-                holder.iconImage.setImageDrawable(cachedIcon)
+            val cached = cache.get(entry.drawableName)
+            if (cached != null) {
+                h.iconImage.setImageDrawable(cached)
             } else {
-                holder.currentJob = adapterScope.launch {
-                    val loadedDrawable = withContext(Dispatchers.IO) {
-                        IconPackHelper.loadIcon(applicationContext, iconPackPackage, drawableName)
+                jobs[entry.drawableName] = lifecycleScope.launch {
+                    val d = withContext(Dispatchers.IO) {
+                        IconPackHelper.loadIcon(this@IconPickerActivity, entry.pack, entry.drawableName)
                     }
-                    if (loadedDrawable != null) {
-                        memoryCache.put(drawableName, loadedDrawable)
-                        if (holder.iconImage.tag == drawableName) {
-                            holder.iconImage.setImageDrawable(loadedDrawable)
+                    if (d != null) {
+                        cache.put(entry.drawableName, d)
+                        if (h.iconImage.tag == entry.drawableName) {
+                            h.iconImage.setImageDrawable(d)
                         }
                     }
                 }
             }
-            holder.itemView.setOnClickListener {
-                saveIconChoice(drawableName)
+
+            h.itemView.setOnClickListener {
+                saveIconChoice(entry)
                 UIHelpers.restartLauncher(this@IconPickerActivity)
             }
         }
 
         @SuppressLint("NotifyDataSetChanged")
-        fun updateData(newIcons: List<String>) {
-            displayedIcons = newIcons
+        fun updateData(data: List<IconEntry>) { displayed = data; notifyDataSetChanged() }
+
+        fun filterActivePacks(active: Set<String>) {
+            displayed = allEntries.filter { it.pack in active }
             notifyDataSetChanged()
         }
 
-        @SuppressLint("NotifyDataSetChanged")
         fun filter(query: String) {
-            displayedIcons = if (query.isEmpty()) {
-                allAvailableIcons
+            displayed = if (query.isEmpty()) {
+                allEntries.filter { it.pack in activePacks }
             } else {
-                allAvailableIcons.filter { it.contains(query, ignoreCase = true) }
+                allEntries.filter { it.pack in activePacks && it.drawableName.contains(query, ignoreCase = true) }
             }
             notifyDataSetChanged()
         }
 
-        fun cleanUp() {
-            adapterScope.cancel()
-            memoryCache.evictAll()
-        }
+        fun cleanUp() { cache.evictAll() }
     }
 }
