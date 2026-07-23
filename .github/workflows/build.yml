@@ -29,11 +29,11 @@ jobs:
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Build Release APK (with R8 minification)
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: IconsCustomizer-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: IconsCustomizer-release
+          path: app/build/outputs/apk/release/*.apk
