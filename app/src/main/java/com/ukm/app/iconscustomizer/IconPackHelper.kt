@@ -480,7 +480,7 @@ object IconPackHelper {
         context: Context,
         iconPackPackageName: String,
         originalIcon: Drawable,
-        iconSize: Int = 192
+        iconSize: Int = 150
     ): Drawable? {
         // ===== 方式一（优先）：从 appfilter.xml 读 overlay 定义 =====
         val overlayInfo = parseFallbackOverlayInfo(context, iconPackPackageName)

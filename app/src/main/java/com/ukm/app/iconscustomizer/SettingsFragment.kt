@@ -600,7 +600,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         val isDockEnabled = prefs.getBoolean("enable_dock", false)
         val isThemeClockWidget = prefs.getBoolean("enable_themed_clock", false)
 
-        val iconSize = prefs.getInt("icon_size", 180).toFloat()
+        val iconSize = prefs.getInt("icon_size", 150).toFloat()
         val dockOpacity = prefs.getInt("dock_folder_opacity", 200).toFloat()
         val dockRadius = prefs.getInt("dock_corner_radius", 60).toFloat()
 

@@ -102,6 +102,22 @@
             android:paddingVertical="16dp" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <!-- 各图标包匹配该应用的专属图标预览 -->
+    <HorizontalScrollView
+        android:id="@+id/packPreviewScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/packPreviewContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+
+    </HorizontalScrollView>
+
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

@@ -164,7 +164,7 @@ class IconPickerActivity : AppCompatActivity() {
     }
 
     // ====================================================================
-    // Chip 筛选栏：每个 Chip 显示图标包匹配该应用的专属图标预览
+    // 匹配预览 + Chip 筛选栏
     // ====================================================================
 
     private fun buildChips(chipGroup: ChipGroup) {
@@ -173,11 +173,9 @@ class IconPickerActivity : AppCompatActivity() {
         chipGroup.visibility = View.VISIBLE
 
         lifecycleScope.launch {
-            // 并行加载每个包的匹配图标
             val chipData = withContext(Dispatchers.IO) {
                 iconPackList.map { pkg ->
                     val label = packLabels[pkg] ?: pkg
-                    // 查找该包 appfilter 中匹配该应用的 drawable
                     val map = IconPackHelper.getAppFilterMap(this@IconPickerActivity, pkg)
                     val matchedName = map[componentString] ?: map.entries.firstOrNull {
                         it.key.startsWith("ComponentInfo{${componentString.substringAfter("{").substringBefore("/")}/")
@@ -189,16 +187,17 @@ class IconPickerActivity : AppCompatActivity() {
                 }
             }
 
+            buildPackPreview(chipData)
+
             for (idx in chipData.indices) {
                 val (pkg, label, matchedIcon) = chipData[idx]
                 val chip = Chip(this@IconPickerActivity).apply {
                     text = label
                     isCheckable = true
                     isChecked = idx == 0
-                    // 有匹配图标则设为 Chip 图标预览
                     if (matchedIcon != null) {
                         chipIcon = matchedIcon
-                        chipIconSize = dpToPx(24f)
+                        chipIconSize = dpToPx(22f)
                     }
                     setOnCheckedChangeListener { _, isChecked ->
                         if (isChecked) activePacks.add(pkg)
@@ -211,10 +210,53 @@ class IconPickerActivity : AppCompatActivity() {
         }
     }
 
+    /** Chip 上方：各图标包匹配该应用的专属图标预览 */
+    private fun buildPackPreview(chipData: List<Triple<String, String, Drawable?>>) {
+        val container = findViewById<LinearLayout>(R.id.packPreviewContainer) ?: return
+        val scroll = findViewById<HorizontalScrollView>(R.id.packPreviewScroll) ?: return
+        container.removeAllViews()
+
+        var hasMatch = false
+        for ((pkg, label, matchedIcon) in chipData) {
+            if (matchedIcon == null) continue
+            hasMatch = true
+
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                setPadding(dpToPx(12f).toInt(), dpToPx(8f).toInt(),
+                    dpToPx(12f).toInt(), dpToPx(8f).toInt())
+            }
+            item.addView(ImageView(this).apply {
+                setImageDrawable(matchedIcon)
+                val s = dpToPx(48f).toInt()
+                layoutParams = LinearLayout.LayoutParams(s, s)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            })
+            item.addView(TextView(this).apply {
+                text = appName; textSize = 12f; maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(dpToPx(72f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+            })
+            item.addView(TextView(this).apply {
+                text = label; textSize = 10f; alpha = 0.6f; maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+            })
+            item.setOnClickListener {
+                val cg = findViewById<ChipGroup>(R.id.packChipGroup)
+                for (i in 0 until cg.childCount) {
+                    (cg.getChildAt(i) as? Chip)?.isChecked = chipData.getOrNull(i)?.first == pkg
+                }
+            }
+            container.addView(item)
+        }
+        scroll.visibility = if (hasMatch) View.VISIBLE else View.GONE
+    }
+
     private fun dpToPx(dp: Float): Float =
-        android.util.TypedValue.applyDimension(
-            android.util.TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics
-        )
+        android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics)
 
     // ====================================================================
     // 当前图标加载
