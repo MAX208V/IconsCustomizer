@@ -466,7 +466,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                 // Available packs = installed packs not already in the list
                 val available = installedIconPacks.filter { it.packageName !in packs }
                 if (available.isEmpty()) {
-                    Toast.makeText(requireContext(), "All icon packs already added", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), getString(R.string.all_packs_added), Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
                 val names = available.map { it.name }.toTypedArray()

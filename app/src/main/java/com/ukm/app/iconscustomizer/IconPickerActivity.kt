@@ -243,7 +243,7 @@ class IconPickerActivity : AppCompatActivity() {
         val manualOverrideKey = "custom_icon_${entry.pack}_$componentString"
         UIHelpers.pushLocalPref(this, manualOverrideKey, entry.drawableName)
         UIHelpers.pushRemotePref(manualOverrideKey, entry.drawableName)
-        Toast.makeText(this, "已设置: ${entry.drawableName} (${entry.packLabel})", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.icon_set, entry.drawableName, entry.packLabel), Toast.LENGTH_SHORT).show()
         finish()
     }
 
@@ -257,7 +257,7 @@ class IconPickerActivity : AppCompatActivity() {
             remotePrefs.edit { remove(key) }
             localPrefs.edit(commit = true) { remove(key) }
         }
-        Toast.makeText(this, "图标已恢复默认", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.icon_reset), Toast.LENGTH_SHORT).show()
         finish()
     }
 
@@ -273,7 +273,6 @@ class IconPickerActivity : AppCompatActivity() {
     inner class IconGridAdapter(private var displayed: List<IconEntry>) :
         RecyclerView.Adapter<IconGridAdapter.ViewHolder>() {
 
-        private val scope = java.util.concurrent.Executors.newSingleThreadExecutor().asCoroutineDispatcher()
         private val cache = LruCache<String, Drawable>(200)
         private val jobs = mutableMapOf<String, Job>()
 
