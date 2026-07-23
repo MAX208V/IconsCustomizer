@@ -19,6 +19,7 @@ import androidx.core.graphics.toColorInt
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
+import org.json.JSONArray
 import org.w3c.dom.Element
 import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
@@ -35,7 +36,11 @@ class MainHook : XposedModule() {
     private var isFirstLaunch = true
     private var prefManager: SharedPreferences? = null
     private var launcherContext: Context? = null
-    private val resolvedCache = ConcurrentHashMap<String, String>()
+    /** 优先级图标包列表（最前面 = 最高优先级） */
+    private var iconPackList: List<String> = emptyList()
+    /** 兜底图标使用的图标包 */
+    private var fallbackIconPack: String = "none"
+    /** 兼容旧版：单一图标包 */
     private var iconPackPackageName: String = "none"
     private var themeHomeScreenOnly: Boolean = false
     private var isThemedIconEnabled: Boolean = false
@@ -48,6 +53,9 @@ class MainHook : XposedModule() {
     private var dockFolderOpacity = 200
     private var dockCornerRadius = 60
     private var iconSize: Int = 180
+
+    /** 缓存：key="pack:component", value=drawableName */
+    private val resolvedCache = ConcurrentHashMap<String, String>()
 
     override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
         super.onModuleLoaded(param)
@@ -67,7 +75,12 @@ class MainHook : XposedModule() {
                     prefManager?.getBoolean("theme_dock_folder", false) ?: false
                 isThemedClockEnabled =
                     prefManager?.getBoolean("enable_themed_clock", false) ?: false
+
+                // 读取优先级图标包列表
                 iconPackPackageName = prefManager?.getString("icon_pack", "none") ?: "none"
+                iconPackList = loadIconPackList(prefManager, iconPackPackageName)
+                fallbackIconPack = prefManager?.getString("fallback_icon_pack", "none") ?: "none"
+
                 dockCornerRadius = prefManager?.getInt("dock_corner_radius", 60) ?: 60
                 if (isThemeDockFolderEnabled) {
                     dockFolderBgColor = prefManager?.getInt("monet_folder_dock_bg_color", 0) ?: 0
@@ -85,8 +98,22 @@ class MainHook : XposedModule() {
         }
     }
 
+    /** 从偏好设置读取图标包优先级列表 */
+    private fun loadIconPackList(prefs: SharedPreferences?, fallbackSingle: String): List<String> {
+        val json = prefs?.getString("icon_pack_list", null)
+        if (!json.isNullOrEmpty()) {
+            try {
+                val arr = JSONArray(json)
+                return (0 until arr.length()).map { arr.getString(it) }
+            } catch (_: Exception) {}
+        }
+        // 向后兼容：使用旧版单一图标包
+        return if (fallbackSingle != "none") listOf(fallbackSingle) else emptyList()
+    }
+
     private fun hookLauncher(packageParam: XposedModuleInterface.PackageLoadedParam) {
         val classLoader = packageParam.defaultClassLoader
+        val anyPack = iconPackList.firstOrNull()
         iconSizeHook(classLoader)
         setLauncherContext(classLoader)
         if (isThemedClockEnabled) {
@@ -98,7 +125,7 @@ class MainHook : XposedModule() {
         if (isDockEnabled) {
             dockHook(classLoader)
         }
-        if (isThemedIconEnabled && iconPackPackageName != "none") {
+        if (isThemedIconEnabled && anyPack != null) {
             iconPackHook(classLoader)
         }
 
@@ -116,7 +143,7 @@ class MainHook : XposedModule() {
             )
         hook(method).intercept { chain ->
             chain.proceed()
-            if (isThemedIconEnabled && iconPackPackageName != "none") {
+            if (isThemedIconEnabled && anyPack != null) {
                 XposedHelpers.setStaticBooleanField(deviceConfigsClass, "sIsDefaultIcon", false)
             }
         }
@@ -133,7 +160,7 @@ class MainHook : XposedModule() {
             val isRestart = getLocalStatePrefs()?.getBoolean("isRestart", false) == true
             if (!isFirstLaunch && !isRestart) {
                 val baseLauncher = chain.thisObject
-                if (isThemedIconEnabled && iconPackPackageName != "none") {
+                if (isThemedIconEnabled && iconPackList.firstOrNull() != null) {
                     XposedHelpers.callMethod(baseLauncher, "refreshAllAppsIcon")
                 }
                 if (isThemedClockEnabled) {
@@ -491,20 +518,31 @@ class MainHook : XposedModule() {
         }
     }
 
+    /**
+     * 获取自定义图标，按优先级级联查找：
+     *
+     * 1. 遍历所有图标包，检查手动覆盖（custom_icon_ 前缀）
+     * 2. 按优先级顺序遍历图标包，在 appfilter.xml 中匹配
+     * 3. 如果所有包均未匹配，使用指定的兜底图标包的通用图标（在启用时）
+     */
     private fun getCustomIcon(
         componentName: ComponentName,
         originalIcon: Drawable
     ): Drawable {
-        if (launcherContext != null) {
-            val exactComponentString =
-                "ComponentInfo{${componentName.packageName}/${componentName.className}}"
-            val manualOverrideKey = "custom_icon_${iconPackPackageName}_$exactComponentString"
+        if (launcherContext == null) return originalIcon
+
+        val exactComponentString =
+            "ComponentInfo{${componentName.packageName}/${componentName.className}}"
+
+        // ===== 阶段 1：检查所有图标包的手动覆盖 =====
+        for (pkg in iconPackList) {
+            val manualOverrideKey = "custom_icon_${pkg}_$exactComponentString"
             val manualDrawableName = prefManager?.getString(manualOverrideKey, null)
 
             if (!manualDrawableName.isNullOrEmpty()) {
                 val manualCustomDrawable = IconPackHelper.loadIcon(
                     launcherContext!!,
-                    iconPackPackageName,
+                    pkg,
                     manualDrawableName
                 )
                 if (manualCustomDrawable != null) {
@@ -512,26 +550,33 @@ class MainHook : XposedModule() {
                     return getCustomColoredDrawableIcon(manualCustomDrawable)
                 }
             }
+        }
 
+        // ===== 阶段 2：按优先级级联查找图标包 =====
+        for (pkg in iconPackList) {
             val appFilterMap =
-                IconPackHelper.getAppFilterMap(launcherContext!!, iconPackPackageName)
-            if (appFilterMap.isEmpty()) return originalIcon
+                IconPackHelper.getAppFilterMap(launcherContext!!, pkg)
+            if (appFilterMap.isEmpty()) continue
 
-            val drawableName = getBestMatchDrawable(componentName, appFilterMap)
+            val drawableName = getBestMatchDrawable(componentName, appFilterMap, pkg)
             if (drawableName != null) {
                 val customDrawable =
-                    IconPackHelper.loadIcon(launcherContext!!, iconPackPackageName, drawableName)
+                    IconPackHelper.loadIcon(launcherContext!!, pkg, drawableName)
                 if (customDrawable != null) {
                     customDrawable.bounds = originalIcon.bounds
                     return getCustomColoredDrawableIcon(customDrawable)
                 }
             }
+        }
 
-            // ★ 新增：appfilter 中未匹配时，尝试使用通用兜底图标
-            if (isFallbackEnabled) {
+        // ===== 阶段 3：使用指定图标包的兜底图标 =====
+        if (isFallbackEnabled) {
+            val fbPack = if (fallbackIconPack != "none") fallbackIconPack
+                         else iconPackList.firstOrNull() ?: "none"
+            if (fbPack != "none") {
                 val fallbackIcon = IconPackHelper.getFallbackIcon(
                     launcherContext!!,
-                    iconPackPackageName,
+                    fbPack,
                     originalIcon
                 )
                 if (fallbackIcon != null) {
@@ -576,11 +621,13 @@ class MainHook : XposedModule() {
 
     private fun getBestMatchDrawable(
         component: ComponentName,
-        appFilterMap: Map<String, String>
+        appFilterMap: Map<String, String>,
+        packName: String
     ): String? {
         val exactString = "ComponentInfo{${component.packageName}/${component.className}}"
+        val cacheKey = "${packName}|$exactString"
 
-        val cachedMatch = resolvedCache[exactString]
+        val cachedMatch = resolvedCache[cacheKey]
         if (cachedMatch != null) {
             return cachedMatch.ifEmpty { null }
         }
@@ -595,7 +642,7 @@ class MainHook : XposedModule() {
                 }
             }
         }
-        resolvedCache[exactString] = match ?: ""
+        resolvedCache[cacheKey] = match ?: ""
         return match
     }
 }

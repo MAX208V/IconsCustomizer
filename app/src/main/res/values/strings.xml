@@ -1,6 +1,58 @@
 <resources>
     <string name="app_name">Icons Customizer</string>
     <string name="xposed_desc">Icons Customizer Module For HyperOS</string>
-    <!-- TODO: Remove or change this placeholder text -->
-    <string name="hello_blank_fragment">Hello blank fragment</string>
+
+    <!-- Settings - Sections -->
+    <string name="section_icons">Icons &amp; Theming</string>
+    <string name="section_colors">Icon Color Customization</string>
+    <string name="section_dock">Dock &amp; Folders</string>
+    <string name="section_widgets">Widgets</string>
+
+    <!-- Settings - Icons -->
+    <string name="enable_theming">Allow Custom Icon Packs</string>
+    <string name="homescreen_only">Theme Home Screen Icons Only</string>
+    <string name="enable_fallback">Use Generic Icons for Unmapped Apps</string>
+    <string name="icon_pack_priority">Icon Pack Priority</string>
+    <string name="icon_pack_summary">%d packs configured</string>
+    <string name="icon_pack_none">No packs configured</string>
+    <string name="add_icon_pack">Add Icon Pack</string>
+    <string name="remove_icon_pack">Remove</string>
+    <string name="manage_icon_packs">Manage Icon Packs</string>
+    <string name="fallback_icon_pack">Fallback Generic Icons</string>
+    <string name="fallback_icon_pack_summary">Which pack to use for generic fallback icons</string>
+    <string name="apply_custom_icon">Apply Custom Icon to Specific Apps</string>
+    <string name="icon_size">Icon Size</string>
+    <string name="restart_launcher">Restart Launcher</string>
+    <string name="launcher_restarted">Launcher Restarted</string>
+    <string name="error_restarting">Error Restarting</string>
+    <string name="service_not_started">Xposed Service Not Started</string>
+    <string name="choose_icon_pack_manage">Configure priority order — top = highest priority</string>
+
+    <!-- Settings - Colors -->
+    <string name="override_colors">Override Icon Colors</string>
+    <string name="foreground_color">Choose Foreground Color</string>
+    <string name="background_color">Choose Background Color</string>
+
+    <!-- Settings - Dock -->
+    <string name="enable_dock">Enable Dock</string>
+    <string name="dock_corners">Dock Corner Radius</string>
+    <string name="theme_dock_folders">Theme Dock and Folders</string>
+    <string name="dock_opacity">Dock Folder Opacity</string>
+    <string name="dock_bg_color">Dock And Folder Background Color</string>
+
+    <!-- Settings - Widgets -->
+    <string name="monet_clock">Monet Clock Widget</string>
+    <string name="clock_color">Clock Widget Color</string>
+
+    <!-- All Apps -->
+    <string name="apply_custom_icon_title">Apply Custom Icon</string>
+    <string name="show_themed_icons">Show Themed Icons</string>
+    <string name="custom_override">Custom override: %s</string>
+    <string name="default_pack_icon">Using default pack icon</string>
+    <string name="unthemed_stock">Unthemed / Stock</string>
+
+    <!-- General -->
+    <string name="done">Done</string>
+    <string name="cancel">Cancel</string>
+    <string name="none">None</string>
 </resources>

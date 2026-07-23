@@ -17,7 +17,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_marginBottom="8dp"
-            android:text="Icons &amp; Theming"
+            android:text="@string/section_icons"
             android:textColor="?attr/colorPrimary"
             android:textSize="14sp"
             android:textStyle="bold" />
@@ -39,7 +39,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="16dp"
-                    android:text="Allow Custom Icon Packs"
+                    android:text="@string/enable_theming"
                     android:textSize="16sp" />
 
                 <com.google.android.material.divider.MaterialDivider
@@ -52,7 +52,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="16dp"
-                    android:text="Theme Home Screen Icons Only"
+                    android:text="@string/homescreen_only"
                     android:textSize="16sp" />
 
                 <com.google.android.material.divider.MaterialDivider
@@ -65,7 +65,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="16dp"
-                    android:text="Use Generic Icons for Unmapped Apps"
+                    android:text="@string/enable_fallback"
                     android:textSize="16sp" />
 
                 <com.google.android.material.divider.MaterialDivider
@@ -73,8 +73,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
 
+                <!-- Icon Pack Priority - summary row -->
                 <LinearLayout
-                    android:id="@+id/row_icon_pack"
+                    android:id="@+id/row_icon_pack_list"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="?attr/selectableItemBackground"
@@ -86,15 +87,53 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Choose Icon Pack"
+                        android:text="@string/icon_pack_priority"
                         android:textSize="16sp" />
 
                     <TextView
-                        android:id="@+id/tv_selected_icon_pack"
+                        android:id="@+id/tv_icon_pack_summary"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:alpha="0.7"
-                        android:text="None"
+                        android:text="@string/icon_pack_none"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <!-- Dynamic icon pack item container -->
+                <LinearLayout
+                    android:id="@+id/icon_pack_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone" />
+
+                <com.google.android.material.divider.MaterialDivider
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <!-- Fallback Icon Pack selector -->
+                <LinearLayout
+                    android:id="@+id/row_fallback_icon_pack"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/fallback_icon_pack"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/tv_fallback_pack"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:alpha="0.7"
+                        android:text="@string/none"
                         android:textSize="14sp" />
                 </LinearLayout>
 
@@ -115,7 +154,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Apply Custom Icon to Specific Apps"
+                        android:text="@string/apply_custom_icon"
                         android:textSize="16sp" />
                 </LinearLayout>
 
@@ -156,7 +195,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_marginBottom="8dp"
-            android:text="Icon Color Customization"
+            android:text="@string/section_colors"
             android:textColor="?attr/colorPrimary"
             android:textSize="14sp"
             android:textStyle="bold" />
@@ -179,7 +218,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="16dp"
-                    android:text="Override Icon Colors"
+                    android:text="@string/override_colors"
                     android:textSize="16sp" />
 
                 <com.google.android.material.divider.MaterialDivider
@@ -202,7 +241,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Choose Foreground Color"
+                        android:text="@string/foreground_color"
                         android:textSize="16sp" />
 
                     <ImageView
@@ -231,7 +270,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Choose Background Color"
+                        android:text="@string/background_color"
                         android:textSize="16sp" />
 
                     <ImageView
@@ -248,7 +287,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_marginBottom="8dp"
-            android:text="Dock &amp; Folders"
+            android:text="@string/section_dock"
             android:textColor="?attr/colorPrimary"
             android:textSize="14sp"
             android:textStyle="bold" />
@@ -270,7 +309,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="16dp"
-                    android:text="Enable Dock"
+                    android:text="@string/enable_dock"
                     android:textSize="16sp" />
 
 
@@ -290,7 +329,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Dock Corner Radius"
+                        android:text="@string/dock_corners"
                         android:textSize="16sp" />
 
                     <com.google.android.material.slider.Slider
@@ -313,7 +352,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="16dp"
-                    android:text="Theme Dock and Folders"
+                    android:text="@string/theme_dock_folders"
                     android:textSize="16sp" />
 
                 <com.google.android.material.divider.MaterialDivider
@@ -333,7 +372,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Dock Folder Opacity"
+                        android:text="@string/dock_opacity"
                         android:textSize="16sp" />
 
                     <com.google.android.material.slider.Slider
@@ -366,7 +405,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Dock And Folder Background Color"
+                        android:text="@string/dock_bg_color"
                         android:textSize="16sp" />
 
                     <ImageView
@@ -383,7 +422,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_marginBottom="8dp"
-            android:text="Widgets"
+            android:text="@string/section_widgets"
             android:textColor="?attr/colorPrimary"
             android:textSize="14sp"
             android:textStyle="bold" />
@@ -405,7 +444,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="16dp"
-                    android:text="Monet Clock Widget"
+                    android:text="@string/monet_clock"
                     android:textSize="16sp" />
 
                 <com.google.android.material.divider.MaterialDivider
@@ -428,7 +467,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Clock Widget Color"
+                        android:text="@string/clock_color"
                         android:textSize="16sp" />
 
                     <ImageView
@@ -444,7 +483,7 @@
             android:layout_width="match_parent"
             android:layout_height="60dp"
             android:layout_marginBottom="32dp"
-            android:text="Restart Launcher"
+            android:text="@string/restart_launcher"
             android:textSize="16sp"
             app:cornerRadius="16dp" />
 

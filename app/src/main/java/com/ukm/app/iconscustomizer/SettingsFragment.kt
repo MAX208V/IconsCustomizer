@@ -3,6 +3,7 @@ package com.ukm.app.iconscustomizer
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -12,6 +13,7 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -27,6 +29,7 @@ import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import com.ukm.app.iconscustomizer.MainActivity.Companion.PREF_NAME
 import io.github.libxposed.service.XposedService
+import org.json.JSONArray
 
 class SettingsFragment : Fragment(), App.ServiceStateListener {
 
@@ -39,7 +42,11 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
     lateinit var switchEnableTheming: MaterialSwitch
     lateinit var switchHomescreenOnly: MaterialSwitch
     lateinit var switchFallbackIcons: MaterialSwitch
-    lateinit var rowIconPack: LinearLayout
+    lateinit var rowIconPackList: LinearLayout
+    lateinit var tvIconPackSummary: TextView
+    lateinit var iconPackContainer: LinearLayout
+    lateinit var rowFallbackPack: LinearLayout
+    lateinit var tvFallbackPack: TextView
     lateinit var rowApplyCustom: LinearLayout
     lateinit var sliderIconSize: Slider
 
@@ -88,7 +95,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val toolbar = requireActivity().findViewById<MaterialToolbar>(R.id.materialToolbar)
-        toolbar.title = "Home"
+        toolbar.title = getString(R.string.app_name)
         installedIconPacks = getInstalledIconPacks(requireContext())
         setupInteractions(view)
     }
@@ -115,7 +122,11 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         switchEnableTheming = view.findViewById(R.id.switch_enable_theming)
         switchHomescreenOnly = view.findViewById(R.id.switch_homescreen_only)
         switchFallbackIcons = view.findViewById(R.id.switch_fallback_icons)
-        rowIconPack = view.findViewById(R.id.row_icon_pack)
+        rowIconPackList = view.findViewById(R.id.row_icon_pack_list)
+        tvIconPackSummary = view.findViewById(R.id.tv_icon_pack_summary)
+        iconPackContainer = view.findViewById(R.id.icon_pack_container)
+        rowFallbackPack = view.findViewById(R.id.row_fallback_icon_pack)
+        tvFallbackPack = view.findViewById(R.id.tv_fallback_pack)
         rowApplyCustom = view.findViewById(R.id.row_apply_custom)
         sliderIconSize = view.findViewById(R.id.slider_icon_size)
 
@@ -144,17 +155,22 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
             }
         }
 
-        rowIconPack.setOnClickListener {
-            showIconPackPicker(view)
+        rowIconPackList.setOnClickListener {
+            showIconPackManager(view)
+        }
+
+        rowFallbackPack.setOnClickListener {
+            showFallbackPackPicker(view)
         }
 
         rowApplyCustom.setOnClickListener {
-            val prefs = mService?.getRemotePreferences(PREF_NAME)
-            val selectedPack = prefs?.getString("icon_pack", "none")
-            if (selectedPack != null && selectedPack != "none") {
+            val prefs = getRemotePrefs()
+            val packs = getIconPackList(prefs)
+            val firstPack = packs.firstOrNull()
+            if (firstPack != null) {
                 val fragment = AllAppsFragment().apply {
                     arguments = Bundle().apply {
-                        putString("EXTRA_ICON_PACK", selectedPack)
+                        putString("EXTRA_ICON_PACK", firstPack)
                     }
                 }
                 requireActivity().supportFragmentManager.beginTransaction()
@@ -191,7 +207,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
 
         rowMonetFg.setOnClickListener {
             val intent = Intent(requireContext(), ColorPickerActivity::class.java).apply {
-                putExtra("EXTRA_TITLE", "Pick Foreground Color")
+                putExtra("EXTRA_TITLE", getString(R.string.foreground_color))
                 putExtra("EXTRA_TARGET_KEY", "monet_fg_color")
                 putExtra("EXTRA_TYPE_KEY", "selected_fg_color_name")
             }
@@ -200,7 +216,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
 
         rowMonetBg.setOnClickListener {
             val intent = Intent(requireContext(), ColorPickerActivity::class.java).apply {
-                putExtra("EXTRA_TITLE", "Pick Background Color")
+                putExtra("EXTRA_TITLE", getString(R.string.background_color))
                 putExtra("EXTRA_TARGET_KEY", "monet_bg_color")
                 putExtra("EXTRA_TYPE_KEY", "selected_bg_color_name")
             }
@@ -233,7 +249,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
 
         rowDockBg.setOnClickListener {
             val intent = Intent(requireContext(), ColorPickerActivity::class.java).apply {
-                putExtra("EXTRA_TITLE", "Pick Dock Background")
+                putExtra("EXTRA_TITLE", getString(R.string.dock_bg_color))
                 putExtra("EXTRA_TARGET_KEY", "monet_folder_dock_bg_color")
                 putExtra("EXTRA_TYPE_KEY", "selected_monet_folder_dock_bg_color")
             }
@@ -277,7 +293,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
 
         rowClockColor.setOnClickListener {
             val intent = Intent(requireContext(), ColorPickerActivity::class.java).apply {
-                putExtra("EXTRA_TITLE", "Pick Clock Color")
+                putExtra("EXTRA_TITLE", getString(R.string.clock_color))
                 putExtra("EXTRA_TARGET_KEY", "monet_clock_color")
                 putExtra("EXTRA_TYPE_KEY", "selected_monet_clock_color")
             }
@@ -289,19 +305,212 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                 val success = UIHelpers.restartLauncher(requireContext())
                 Toast.makeText(
                     context,
-                    if (success) "Launcher Restarted" else "Error Restarting",
+                    if (success) getString(R.string.launcher_restarted) else getString(R.string.error_restarting),
                     Toast.LENGTH_SHORT
                 ).show()
             }
         }
     }
 
+    // ====================================================================
+    // Icon Pack Priority Management
+    // ====================================================================
+
+    private fun getRemotePrefs(): SharedPreferences? {
+        return mService?.getRemotePreferences(PREF_NAME)
+    }
+
+    private fun getIconPackList(prefs: SharedPreferences?): List<String> {
+        val json = prefs?.getString("icon_pack_list", null)
+        if (!json.isNullOrEmpty()) {
+            try {
+                val arr = JSONArray(json)
+                return (0 until arr.length()).map { arr.getString(it) }
+            } catch (_: Exception) {}
+        }
+        // Backward compat: migrate from old single pack
+        val single = prefs?.getString("icon_pack", "none")
+        return if (single != null && single != "none") listOf(single) else emptyList()
+    }
+
+    private fun getIconPackLabel(packageName: String): String {
+        return installedIconPacks.find { it.packageName == packageName }?.name ?: packageName
+    }
+
+    private fun showIconPackManager(view: View) {
+        val prefs = getRemotePrefs() ?: return
+        val packs = getIconPackList(prefs).toMutableList()
+
+        // Build dialog content
+        val scrollContent = FrameLayout(requireContext()).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val container = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(
+                dpToPx(8f).toInt(), dpToPx(8f).toInt(),
+                dpToPx(8f).toInt(), dpToPx(4f).toInt()
+            )
+        }
+        scrollContent.addView(container)
+
+        // List of packs
+        val packListContainer = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            id = View.generateViewId()
+        }
+        container.addView(packListContainer)
+
+        fun refreshPackList() {
+            packListContainer.removeAllViews()
+            packs.forEachIndexed { idx, pkg ->
+                val label = getIconPackLabel(pkg)
+                val row = LinearLayout(requireContext()).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    setPadding(dpToPx(4f).toInt(), dpToPx(8f).toInt(), 0, dpToPx(8f).toInt())
+                }
+                // Priority number badge
+                row.addView(TextView(requireContext()).apply {
+                    text = "${idx + 1}."
+                    textSize = 14f
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    setTextColor(ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_on_surface_emphasis_high_type))
+                    layoutParams = LinearLayout.LayoutParams(
+                        dpToPx(32f).toInt(),
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                })
+                // Pack name
+                row.addView(TextView(requireContext()).apply {
+                    text = label
+                    textSize = 15f
+                    layoutParams = LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+                    )
+                })
+                // Remove button
+                row.addView(TextView(requireContext()).apply {
+                    text = getString(R.string.remove_icon_pack)
+                    textSize = 13f
+                    setTextColor(ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_dynamic_primary50))
+                    setPadding(dpToPx(12f).toInt(), dpToPx(6f).toInt(), dpToPx(12f).toInt(), dpToPx(6f).toInt())
+                    setOnClickListener {
+                        packs.removeAt(idx)
+                        refreshPackList()
+                    }
+                })
+                packListContainer.addView(row)
+            }
+            // Show hint when empty
+            if (packs.isEmpty()) {
+                packListContainer.addView(TextView(requireContext()).apply {
+                    text = getString(R.string.icon_pack_none)
+                    textSize = 14f
+                    alpha = 0.6f
+                    setPadding(0, dpToPx(12f).toInt(), 0, dpToPx(12f).toInt())
+                })
+            }
+        }
+
+        refreshPackList()
+
+        // Add button
+        val addBtn = MaterialButton(requireContext(), null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = getString(R.string.add_icon_pack)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dpToPx(12f).toInt() }
+            setOnClickListener {
+                // Available packs = installed packs not already in the list
+                val available = installedIconPacks.filter { it.packageName !in packs }
+                if (available.isEmpty()) {
+                    Toast.makeText(requireContext(), "All icon packs already added", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                val names = available.map { it.name }.toTypedArray()
+                val pkgs = available.map { it.packageName }.toTypedArray()
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle(getString(R.string.add_icon_pack))
+                    .setItems(names) { _, which ->
+                        packs.add(pkgs[which])
+                        refreshPackList()
+                    }
+                    .setNegativeButton(getString(R.string.cancel), null)
+                    .show()
+            }
+        }
+        container.addView(addBtn)
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(getString(R.string.icon_pack_priority))
+            .setMessage(getString(R.string.choose_icon_pack_manage))
+            .setView(scrollContent)
+            .setPositiveButton(getString(R.string.done)) { _, _ ->
+                saveIconPackList(packs)
+                applyServiceStateToUI(view)
+                UIHelpers.restartLauncher(requireContext())
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+
+    private fun saveIconPackList(packs: List<String>) {
+        val json = JSONArray(packs).toString()
+        UIHelpers.pushRemotePref("icon_pack_list", json)
+        // Keep old single field in sync for backward compat
+        UIHelpers.pushRemotePref("icon_pack", packs.firstOrNull() ?: "none")
+    }
+
+    // ====================================================================
+    // Fallback Icon Pack Selector
+    // ====================================================================
+
+    private fun showFallbackPackPicker(view: View) {
+        val prefs = getRemotePrefs() ?: return
+        val currentFallback = prefs.getString("fallback_icon_pack", "none") ?: "none"
+
+        val names = mutableListOf(getString(R.string.none))
+        val pkgs = mutableListOf("none")
+        // Show all installed packs + packs currently in the priority list
+        val allKnown = mutableSetOf<String>()
+        allKnown.addAll(installedIconPacks.map { it.packageName })
+        allKnown.addAll(getIconPackList(prefs))
+        val sorted = allKnown.sortedBy { getIconPackLabel(it) }
+        for (pkg in sorted) {
+            pkgs.add(pkg)
+            names.add(getIconPackLabel(pkg))
+        }
+
+        val currentIndex = pkgs.indexOf(currentFallback).coerceAtLeast(0)
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(getString(R.string.fallback_icon_pack))
+            .setSingleChoiceItems(names.toTypedArray(), currentIndex) { dialog, which ->
+                val selected = pkgs[which]
+                UIHelpers.pushRemotePref("fallback_icon_pack", selected)
+                applyServiceStateToUI(view)
+                UIHelpers.restartLauncher(requireContext())
+                dialog.dismiss()
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+
+    // ====================================================================
+    // UI State
+    // ====================================================================
+
     private fun applyServiceStateToUI(view: View?) {
         if (view == null) return
 
         if (mService == null) {
             context?.let {
-                Toast.makeText(it, "XposedService Not Started", Toast.LENGTH_SHORT).show()
+                Toast.makeText(it, getString(R.string.service_not_started), Toast.LENGTH_SHORT).show()
             }
             setUiEnabled(view, false)
             return
@@ -315,7 +524,6 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         val isThemeDockFolder = prefs.getBoolean("theme_dock_folder", false)
         val isDockEnabled = prefs.getBoolean("enable_dock", false)
         val isThemeClockWidget = prefs.getBoolean("enable_themed_clock", false)
-        val selectedPackId = prefs.getString("icon_pack", "none") ?: "none"
 
         val iconSize = prefs.getInt("icon_size", 180).toFloat()
         val dockOpacity = prefs.getInt("dock_folder_opacity", 200).toFloat()
@@ -335,10 +543,18 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         sliderDockCornerRadius.value = dockRadius
         isUpdatingUI = false
 
-        val selectedPackName =
-            if (selectedPackId == "none") "None" else installedIconPacks.find { it.packageName == selectedPackId }?.name
-                ?: "Unknown"
-        view.findViewById<TextView>(R.id.tv_selected_icon_pack).text = selectedPackName
+        // Update icon pack summary
+        val packList = getIconPackList(prefs)
+        if (packList.isNotEmpty()) {
+            tvIconPackSummary.text = getString(R.string.icon_pack_summary, packList.size)
+        } else {
+            tvIconPackSummary.text = getString(R.string.icon_pack_none)
+        }
+        buildPackListInline(packList)
+
+        // Update fallback pack
+        val fbPack = prefs.getString("fallback_icon_pack", "none") ?: "none"
+        tvFallbackPack.text = if (fbPack == "none") getString(R.string.none) else getIconPackLabel(fbPack)
 
         updateColorPreview(view, R.id.img_preview_fg, prefs.getInt("monet_fg_color", 0))
         updateColorPreview(view, R.id.img_preview_bg, prefs.getInt("monet_bg_color", 0))
@@ -349,18 +565,21 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         )
         updateColorPreview(view, R.id.img_preview_clock, prefs.getInt("monet_clock_color", 0))
 
+        // Toggle visibility
         val vTheming = if (isThemingEnabled) View.VISIBLE else View.GONE
         switchHomescreenOnly.visibility = vTheming
         view.findViewById<View>(R.id.div_homescreen_only).visibility = vTheming
         switchFallbackIcons.visibility = vTheming
         view.findViewById<View>(R.id.div_fallback_icons).visibility = vTheming
-        view.findViewById<View>(R.id.row_icon_pack).visibility = vTheming
+        view.findViewById<View>(R.id.row_icon_pack_list).visibility = vTheming
         view.findViewById<View>(R.id.div_icon_pack).visibility = vTheming
+        iconPackContainer.visibility = vTheming
+        rowFallbackPack.visibility = vTheming
         view.findViewById<View>(R.id.title_monet_colors).visibility = vTheming
         view.findViewById<View>(R.id.card_monet_colors).visibility = vTheming
 
-        val vApplyCustom =
-            if (isThemingEnabled && selectedPackId != "none") View.VISIBLE else View.GONE
+        val anyPack = packList.firstOrNull()
+        val vApplyCustom = if (isThemingEnabled && anyPack != null) View.VISIBLE else View.GONE
         view.findViewById<View>(R.id.row_apply_custom).visibility = vApplyCustom
         view.findViewById<View>(R.id.div_apply_custom).visibility = vApplyCustom
 
@@ -372,7 +591,6 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
 
         val vDockMonet = if (isThemeDockFolder) View.VISIBLE else View.GONE
         view.findViewById<View>(R.id.row_dock_bg).visibility = vDockMonet
-        view.findViewById<View>(R.id.div_dock_bg).visibility = vDockMonet
         view.findViewById<View>(R.id.div_dock_bg).visibility = vDockMonet
 
         val vDockFolder = if (isThemeDockFolder) View.VISIBLE else View.GONE
@@ -387,26 +605,48 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         view.findViewById<View>(R.id.div_clock_color).visibility = vClock
     }
 
-    private fun showIconPackPicker(view: View) {
-        val displayNames = arrayOf("None") + installedIconPacks.map { it.name }.toTypedArray()
-        val packageNames =
-            arrayOf("none") + installedIconPacks.map { it.packageName }.toTypedArray()
-
-        val prefs = mService?.getRemotePreferences(PREF_NAME)
-        val currentSelection = prefs?.getString("icon_pack", "none")
-        val currentIndex = packageNames.indexOf(currentSelection).takeIf { it >= 0 } ?: 0
-
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle("Choose Icon Pack")
-            .setSingleChoiceItems(displayNames, currentIndex) { dialog, which ->
-                val selectedPkg = packageNames[which]
-                UIHelpers.pushRemotePref("icon_pack", selectedPkg)
-                applyServiceStateToUI(view)
-                UIHelpers.restartLauncher(requireContext())
-                dialog.dismiss()
+    /** Build inline list of priority packs with remove buttons */
+    private fun buildPackListInline(packs: List<String>) {
+        iconPackContainer.removeAllViews()
+        if (packs.isEmpty()) {
+            iconPackContainer.visibility = View.GONE
+            return
+        }
+        iconPackContainer.visibility = View.VISIBLE
+        packs.forEachIndexed { idx, pkg ->
+            val label = getIconPackLabel(pkg)
+            val row = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(
+                    dpToPx(16f).toInt(), dpToPx(4f).toInt(),
+                    dpToPx(16f).toInt(), dpToPx(4f).toInt()
+                )
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            // Badge
+            row.addView(TextView(requireContext()).apply {
+                text = "${idx + 1}"
+                textSize = 11f
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                gravity = android.view.Gravity.CENTER
+                val size = dpToPx(22f).toInt()
+                layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                    setMargins(0, 0, dpToPx(10f).toInt(), 0)
+                }
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#33000000"))
+                    cornerRadius = dpToPx(11f)
+                }
+                setTextColor(Color.parseColor("#99000000"))
+            })
+            // Name
+            row.addView(TextView(requireContext()).apply {
+                text = label
+                textSize = 14f
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            iconPackContainer.addView(row)
+        }
     }
 
     private fun updateColorPreview(view: View, imageViewId: Int, savedColor: Int) {
