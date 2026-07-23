@@ -495,28 +495,82 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         val prefs = getRemotePrefs() ?: return
         val currentFallback = prefs.getString("fallback_icon_pack", "none") ?: "none"
 
-        val names = mutableListOf(getString(R.string.none))
-        val pkgs = mutableListOf("none")
-        // Show all installed packs + packs currently in the priority list
-        val allKnown = mutableSetOf<String>()
+        // 所有可选的包
+        val allKnown = mutableListOf("none")
         allKnown.addAll(installedIconPacks.map { it.packageName })
-        allKnown.addAll(getIconPackList(prefs))
-        val sorted = allKnown.sortedBy { getIconPackLabel(it) }
-        for (pkg in sorted) {
-            pkgs.add(pkg)
-            names.add(getIconPackLabel(pkg))
-        }
+        // 去重
+        val seen = mutableSetOf<String>()
+        val items = allKnown.filter { seen.add(it) }
 
-        val currentIndex = pkgs.indexOf(currentFallback).coerceAtLeast(0)
+        val currentIndex = items.indexOf(currentFallback).coerceAtLeast(0)
+
+        // 构建带图标的对话框列表
+        val contentView = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val listContainer = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        contentView.addView(listContainer)
+
+        val selectedIndex = intArrayOf(currentIndex)
+
+        fun renderList() {
+            listContainer.removeAllViews()
+            items.forEachIndexed { idx, pkg ->
+                val isNone = pkg == "none"
+                val label = if (isNone) getString(R.string.none) else getIconPackLabel(pkg)
+                val row = LinearLayout(requireContext()).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    setPadding(dpToPx(16f).toInt(), dpToPx(10f).toInt(), dpToPx(16f).toInt(), dpToPx(10f).toInt())
+                    background = if (idx == selectedIndex[0])
+                        ContextCompat.getDrawable(requireContext(), com.google.android.material.R.drawable.selector_button)?.mutate()
+                    else null
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        selectedIndex[0] = idx
+                        renderList()
+                    }
+                }
+                // 选中标记
+                row.addView(TextView(requireContext()).apply {
+                    text = if (idx == selectedIndex[0]) "●" else "○"
+                    textSize = 16f
+                    setTextColor(if (idx == selectedIndex[0]) ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_dynamic_primary50)
+                        else ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_on_surface_emphasis_medium_type))
+                    layoutParams = LinearLayout.LayoutParams(dpToPx(28f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+                })
+                // APK 图标（None 时无图标）
+                if (!isNone) {
+                    row.addView(createPackIconView(pkg).apply {
+                        (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dpToPx(10f).toInt()
+                    })
+                } else {
+                    row.addView(TextView(requireContext()).apply {
+                        layoutParams = LinearLayout.LayoutParams(dpToPx(28f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+                    })
+                }
+                // 名称
+                row.addView(TextView(requireContext()).apply {
+                    text = label
+                    textSize = 16f
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                })
+                listContainer.addView(row)
+            }
+        }
+        renderList()
 
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(getString(R.string.fallback_icon_pack))
-            .setSingleChoiceItems(names.toTypedArray(), currentIndex) { dialog, which ->
-                val selected = pkgs[which]
+            .setView(contentView)
+            .setPositiveButton(getString(R.string.done)) { _, _ ->
+                val selected = items[selectedIndex[0]]
                 UIHelpers.pushRemotePref("fallback_icon_pack", selected)
                 applyServiceStateToUI(view)
                 UIHelpers.restartLauncher(requireContext())
-                dialog.dismiss()
             }
             .setNegativeButton(getString(R.string.cancel), null)
             .show()

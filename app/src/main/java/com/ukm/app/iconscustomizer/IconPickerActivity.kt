@@ -104,7 +104,7 @@ class IconPickerActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val allIcons = withContext(Dispatchers.IO) { loadAllEntries() }
             allEntries.addAll(allIcons)
-            activePacks.addAll(iconPackList)
+            activePacks.add(iconPackList.firstOrNull() ?: "")
             spinner.visibility = View.GONE
 
             // 构建 Chip 筛选栏
@@ -172,12 +172,12 @@ class IconPickerActivity : AppCompatActivity() {
         if (iconPackList.size <= 1) return
         chipGroup.visibility = View.VISIBLE
 
-        for (pkg in iconPackList) {
+        for ((idx, pkg) in iconPackList.withIndex()) {
             val label = packLabels[pkg] ?: pkg
             val chip = Chip(this).apply {
                 text = label
                 isCheckable = true
-                isChecked = true
+                isChecked = idx == 0 // 默认只选中第一个
                 setOnCheckedChangeListener { _, isChecked ->
                     if (isChecked) activePacks.add(pkg)
                     else activePacks.remove(pkg)
