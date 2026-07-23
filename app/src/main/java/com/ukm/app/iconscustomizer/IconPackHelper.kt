@@ -300,21 +300,35 @@ object IconPackHelper {
     }
 
     /**
-     * 使用 ADW/Nova 标准的 iconback / iconupon / iconmask 机制
-     * 为未适配的应用合成统一风格的兜底图标。
+     * 将任意 Drawable 渲染到指定尺寸的 Bitmap 中（不改变原 drawable 状态）
+     */
+    private fun drawableToBitmap(d: Drawable, size: Int): Bitmap {
+        val bmp = createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        d.setBounds(0, 0, size, size)
+        d.draw(c)
+        return bmp
+    }
+
+    /**
+     * 根据 ADW / Nova 图标包规范为未适配应用合成兜底图标。
      *
-     * 合成顺序（与 CM11 IconPackHelper.java 一致）：
+     * 实现严格参照 CM11 IconPackHelper.IconCustomizer.createIconBitmap():
+     * https://github.com/ResurrectionRemix/android_frameworks_base/commit/9973d6d
      *
-     *   1. 画缩放后的原图标                                  → 正常绘制
-     *   2. 用 iconMask 裁剪原图标（DST_OUT）                  → 蒙版透明区域 = 保留图标
-     *   3. 用 iconBack 背景放在最下层（DST_OVER）              → 绘制在当前内容后面
-     *   4. 最后画 iconUpon 前景在最上层                       → 正常绘制
+     * 合成步骤（同一 Canvas，依次使用不同 PorterDuff 模式）：
      *
-     * DST_OUT: 保留目标中来源没有覆盖的部分
-     *   蒙版透明(Sa=0) → 保留图标    蒙版不透明(Sa=1) → 去掉图标
+     *   ① 画缩放后的原图标                        → 正常绘制
+     *   ② iconMask 裁剪（DST_OUT）               → 蒙版透明处保留图标
+     *   ③ iconBack 背景（DST_OVER）               → 绘制在已裁切图标**后面**
+     *   ④ iconUpon 前景                           → 正常绘制在最上层
      *
-     * DST_OVER: 绘制在目标后面
-     *   背景绘制在当前(已裁切的图标)后面
+     * ⚠ Xfermode 必须通过 canvas.drawBitmap(bitmap, paint) 生效，
+     *   不能仅设在一个 Paint 上然后调用 drawable.draw()，
+     *   因为 drawable.draw() 使用 drawable 自身的 Paint，不会用传进去的 Paint。
+     *
+     * DST_OUT  = 清除目标中来源覆盖的部分（透明蒙版=保留图标，不透明蒙版=移除图标）
+     * DST_OVER = 绘制在目标内容之后（已有图标的区域不受影响，透明处补上背景）
      */
     fun generateOverlayFallbackIcon(
         context: Context,
@@ -323,65 +337,80 @@ object IconPackHelper {
         overlayInfo: FallbackOverlayInfo
     ): Drawable? {
         return try {
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            // ---- 选取各层变体 ----
+            val backName  = overlayInfo.iconBackNames.ifEmpty { null }?.random()
+            val uponName  = overlayInfo.iconUponNames.ifEmpty { null }?.random()
+            val maskName  = overlayInfo.iconMaskNames.ifEmpty { null }?.random()
 
-            // 从图标包定义中选取各层（如果有多个变体则随机选一个）
-            val backName = overlayInfo.iconBackNames.ifEmpty { null }?.random()
-            val uponName = overlayInfo.iconUponNames.ifEmpty { null }?.random()
-            val maskName = overlayInfo.iconMaskNames.ifEmpty { null }?.random()
+            val backDrawable  = backName?.let { loadIcon(context, iconPackPackageName, it) }
+            val uponDrawable  = uponName?.let { loadIcon(context, iconPackPackageName, it) }
+            val maskDrawable  = maskName?.let { loadIcon(context, iconPackPackageName, it) }
 
-            val backDrawable = backName?.let { loadIcon(context, iconPackPackageName, it) }
-            val uponDrawable = uponName?.let { loadIcon(context, iconPackPackageName, it) }
-            val maskDrawable = maskName?.let { loadIcon(context, iconPackPackageName, it) }
-
-            // 如果没有背景也没有蒙版，无法合成
+            // 至少需要 <iconback> 或 <iconmask> 之一才能合成
             if (backDrawable == null && maskDrawable == null) return null
 
-            // 确定合成尺寸
-            val size = if (originalIcon.intrinsicWidth > 0 && originalIcon.intrinsicHeight > 0) {
-                maxOf(originalIcon.intrinsicWidth, originalIcon.intrinsicHeight)
-            } else 192
+            // ---- 尺寸 ----
+            val size = originalIcon.let {
+                val w = it.intrinsicWidth; val h = it.intrinsicHeight
+                if (w > 0 && h > 0) maxOf(w, h) else 192
+            }
 
-            // 创建画布
-            val bitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
+            // ---- 主画布 ----
+            val resultBitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(resultBitmap)
 
-            val safeOriginal = originalIcon.mutate()
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-            // ===== 第 1 步：画原图标（缩放） =====
-            val factor = overlayInfo.scale
-            safeOriginal.setBounds(0, 0, size, size)
+            // ═══════════════════════════════════════════════════════
+            // 第 ① 步：画缩放后的原图标（正常绘制）
+            // ═══════════════════════════════════════════════════════
+            val icon = originalIcon.mutate()
+            icon.setBounds(0, 0, size, size)
             canvas.save()
-            canvas.scale(factor, factor, size / 2f, size / 2f)
-            safeOriginal.draw(canvas)
+            canvas.scale(overlayInfo.scale, overlayInfo.scale, size / 2f, size / 2f)
+            icon.draw(canvas)
             canvas.restore()
+            // → 画布内容: [缩放后的原图标]
 
-            // ===== 第 2 步：用 iconMask 裁剪原图标 =====
-            // DST_OUT: 保留目标(已画内容)中来源(蒙版)没有覆盖的部分
-            // 蒙版透明(Sa≈0) → 保留图标    蒙版不透明(Sa≈1) → 去掉图标
+            // ═══════════════════════════════════════════════════════
+            // 第 ② 步：iconMask 裁剪（DST_OUT）
+            //   DST_OUT = [Da*(1-Sa), Dc*(1-Sa)]
+            //   蒙版透明处(Sa≈0) → 保留图标(Sa≈Da)
+            //   蒙版不透明(Sa≈1) → 移除图标(Sa≈0)
+            // ═══════════════════════════════════════════════════════
             if (maskDrawable != null) {
+                val maskBmp = drawableToBitmap(maskDrawable, size)
                 paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
-                maskDrawable.setBounds(0, 0, size, size)
-                maskDrawable.draw(canvas)
+                canvas.drawBitmap(maskBmp, 0f, 0f, paint)
                 paint.xfermode = null
             }
+            // → 画布内容: [在蒙版"窗口"内可见的原图标]
 
-            // ===== 第 3 步：用 iconBack 背景放在最下层 =====
-            // DST_OVER: 绘制在当前内容后面
+            // ═══════════════════════════════════════════════════════
+            // 第 ③ 步：iconBack 背景（DST_OVER）
+            //   DST_OVER = [Sc*(1-Da)+Dc, Sa+Da-Sa*Da]
+            //   图标区域(Da>0) → 背景绘制在图标**后面**，不遮挡图标
+            //   透明区域(Da=0) → 背景完全可见，补上底色
+            // ═══════════════════════════════════════════════════════
             if (backDrawable != null) {
+                val backBmp = drawableToBitmap(backDrawable, size)
                 paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OVER)
-                backDrawable.setBounds(0, 0, size, size)
-                backDrawable.draw(canvas)
+                canvas.drawBitmap(backBmp, 0f, 0f, paint)
                 paint.xfermode = null
             }
+            // → 画布内容: [背景(底层) + 裁切图标(上层)]
 
-            // ===== 第 4 步：最后画前景在最上层 =====
+            // ═══════════════════════════════════════════════════════
+            // 第 ④ 步：iconUpon 前景（正常绘制在最上层）
+            // ═══════════════════════════════════════════════════════
             if (uponDrawable != null) {
                 uponDrawable.setBounds(0, 0, size, size)
                 uponDrawable.draw(canvas)
             }
+            // → 画布内容: [背景(底层) + 裁切图标(中层) + 前景(顶层)]
 
-            BitmapDrawable(context.resources, bitmap)
+            BitmapDrawable(context.resources, resultBitmap)
+
         } catch (e: Exception) {
             Log.e(TAG, "Failed to generate overlay fallback icon: ${e.message}")
             null
