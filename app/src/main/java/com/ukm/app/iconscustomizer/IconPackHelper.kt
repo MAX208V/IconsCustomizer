@@ -370,17 +370,16 @@ object IconPackHelper {
 
             // ===== 第三步：合成最终结果 =====
             val resultBitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            Canvas(resultBitmap).apply {
-                // 1. 画背景
-                backDrawable.setBounds(0, 0, size, size)
-                backDrawable.draw(this)
-                // 2. 画裁剪后的图标
-                drawBitmap(finalIconBitmap, 0f, 0f, null)
-                // 3. 画前景
-                uponDrawable?.apply {
-                    setBounds(0, 0, size, size)
-                    draw(this@apply)
-                }
+            val resultCanvas = Canvas(resultBitmap)
+            // 1. 画背景
+            backDrawable.setBounds(0, 0, size, size)
+            backDrawable.draw(resultCanvas)
+            // 2. 画裁剪后的图标
+            resultCanvas.drawBitmap(finalIconBitmap, 0f, 0f, null)
+            // 3. 画前景
+            uponDrawable?.let { d ->
+                d.setBounds(0, 0, size, size)
+                d.draw(resultCanvas)
             }
 
             BitmapDrawable(context.resources, resultBitmap)
