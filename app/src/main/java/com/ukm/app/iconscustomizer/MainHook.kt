@@ -577,7 +577,8 @@ class MainHook : XposedModule() {
                 val fallbackIcon = IconPackHelper.getFallbackIcon(
                     launcherContext!!,
                     fbPack,
-                    originalIcon
+                    originalIcon,
+                    iconSize
                 )
                 if (fallbackIcon != null) {
                     fallbackIcon.bounds = originalIcon.bounds

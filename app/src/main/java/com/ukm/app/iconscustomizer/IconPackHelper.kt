@@ -422,11 +422,13 @@ object IconPackHelper {
      * 当图标包没有提供任何 <iconback>/<iconmask> 或通用 drawable 时使用。
      *
      * 样式：浅色圆角矩形背景 + 居中缩小的原图标
+     *
+     * @param size 输出图标尺寸（像素），应从应用设置的 icon_size 读取
      */
     fun generateBuiltInFallbackIcon(
         context: Context,
         originalIcon: Drawable,
-        size: Int = 192
+        size: Int
     ): Drawable? {
         return try {
             val bitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -471,11 +473,14 @@ object IconPackHelper {
      *    用这些定义将原图标与背景/蒙版/前景组合（ADW 标准）
      * 2. 如果图标包没有定义 overlay，尝试直接加载通用 drawable
      * 3. 都失败则使用内置兜底图标（圆角矩形+居中图标）
+     *
+     * @param iconSize 输出图标尺寸（像素），从应用设置的 icon_size 读取
      */
     fun getFallbackIcon(
         context: Context,
         iconPackPackageName: String,
-        originalIcon: Drawable
+        originalIcon: Drawable,
+        iconSize: Int = 192
     ): Drawable? {
         // ===== 方式一（优先）：从 appfilter.xml 读 overlay 定义 =====
         val overlayInfo = parseFallbackOverlayInfo(context, iconPackPackageName)
@@ -491,7 +496,7 @@ object IconPackHelper {
         if (generic != null) return generic
 
         // ===== 方式三（最终兜底）：内置通用图标 =====
-        return generateBuiltInFallbackIcon(context, originalIcon)
+        return generateBuiltInFallbackIcon(context, originalIcon, iconSize)
     }
 
     fun putColorIntoDrawable(
