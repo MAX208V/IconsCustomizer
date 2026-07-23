@@ -198,7 +198,6 @@ class IconPickerActivity : AppCompatActivity() {
                     // 有匹配图标则设为 Chip 图标预览
                     if (matchedIcon != null) {
                         chipIcon = matchedIcon
-                        chipIconVisible = true
                         chipIconSize = dpToPx(24f)
                     }
                     setOnCheckedChangeListener { _, isChecked ->
