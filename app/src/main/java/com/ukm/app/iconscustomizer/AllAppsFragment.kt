@@ -42,7 +42,9 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
     private lateinit var iconPackList: List<String>
     private lateinit var adapter: AppAdapter
     private var allApps = listOf<AppInfo>()
-    private var appFilterMap: Map<String, String> = emptyMap()
+    /** 每个图标包的 appFilterMap: pack -> (component -> drawableName) */
+    private var packAppFilterMaps: Map<String, Map<String, String>> = emptyMap()
+    private var packLabels: Map<String, String> = emptyMap()
     private var showThemedIcons = true
 
     private fun getPrefs(): SharedPreferences {
@@ -50,14 +52,23 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
     }
 
     private fun loadPackList(): List<String> {
-        // 先从参数读取，参数不存在则从偏好读取
         val json = arguments?.getString("EXTRA_ICON_PACK_LIST") ?: getPrefs().getString("icon_pack_list", null)
         if (!json.isNullOrEmpty()) {
             try { return JSONArray(json).let { (0 until it.length()).map { i -> it.getString(i) } } } catch (_: Exception) {}
         }
-        // 向后兼容
         val single = arguments?.getString("EXTRA_ICON_PACK") ?: getPrefs().getString("icon_pack", "none")
         return if (single != null && single != "none") listOf(single) else emptyList()
+    }
+
+    private fun getPackLabel(packageName: String): String {
+        if (packageName in packLabels) return packLabels[packageName]!!
+        val label = try {
+            val pm = requireContext().packageManager
+            val ai = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(ai).toString()
+        } catch (_: Exception) { packageName }
+        packLabels = packLabels + (packageName to label)
+        return label
     }
 
     data class AppInfo(
@@ -113,12 +124,14 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
         }, viewLifecycleOwner, Lifecycle.State.RESUMED)
 
         viewLifecycleOwner.lifecycleScope.launch {
-            val firstPack = iconPackList.firstOrNull()
-            if (firstPack != null) {
-                appFilterMap = withContext(Dispatchers.IO) {
-                    IconPackHelper.getAppFilterMap(requireContext(), firstPack)
+            // 为每个图标包加载 appFilterMap
+            val maps = mutableMapOf<String, Map<String, String>>()
+            for (pkg in iconPackList) {
+                maps[pkg] = withContext(Dispatchers.IO) {
+                    IconPackHelper.getAppFilterMap(requireContext(), pkg)
                 }
             }
+            packAppFilterMaps = maps
             allApps = withContext(Dispatchers.IO) { loadInstalledApps() }
             adapter.updateData(allApps)
         }
@@ -212,72 +225,76 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
             val app = filteredApps[position]
             holder.appName.text = app.name
 
-            // 检查所有图标包的手动覆盖
-            var manualIcon: String? = null
+            // 级联查找：手动覆盖 → pack[0] → pack[1] → ... → pack[n]
+            var sourcePack: String? = null  // 最终来源图标包
+            var targetDrawableName: String? = null
+
+            // 阶段1: 检查所有图标包的手动覆盖
             for (pkg in iconPackList) {
                 val m = prefs.getString("custom_icon_${pkg}_${app.componentString}", null)
-                if (!m.isNullOrEmpty()) { manualIcon = m; break }
+                if (!m.isNullOrEmpty()) {
+                    sourcePack = pkg
+                    targetDrawableName = m
+                    break
+                }
             }
 
-            var targetDrawableName = manualIcon ?: appFilterMap[app.componentString]
+            // 阶段2: 按优先级级联查找 appfilter 匹配
             if (targetDrawableName == null) {
-                val packagePrefix = "ComponentInfo{${app.packageName}/"
-                targetDrawableName =
-                    appFilterMap.entries.firstOrNull { it.key.startsWith(packagePrefix) }?.value
+                for (pkg in iconPackList) {
+                    val map = packAppFilterMaps[pkg] ?: continue
+                    val dn = map[app.componentString] ?: map.entries.firstOrNull {
+                        it.key.startsWith("ComponentInfo{${app.packageName}/")
+                    }?.value
+                    if (dn != null) {
+                        sourcePack = pkg
+                        targetDrawableName = dn
+                        break
+                    }
+                }
             }
 
-            if (manualIcon != null) {
-                holder.appAssignedIcon.text = getString(R.string.custom_override, manualIcon)
+            // 显示来源状态
+            if (sourcePack != null && targetDrawableName != null) {
+                val packLabel = getPackLabel(sourcePack)
+                holder.appAssignedIcon.text = "使用 $packLabel 图标"
                 holder.appAssignedIcon.setTextColor(0xFF4CAF50.toInt())
-            } else if (targetDrawableName != null) {
-                holder.appAssignedIcon.text = getString(R.string.default_pack_icon)
-                holder.appAssignedIcon.setTextColor(0xFF888888.toInt())
             } else {
                 holder.appAssignedIcon.text = getString(R.string.unthemed_stock)
                 holder.appAssignedIcon.setTextColor(0xFFE53935.toInt())
             }
 
+            // 加载预览图标（从来源包加载）
             if (!isThemedMode) {
                 holder.appIcon.tag = "stock_${app.componentString}"
                 holder.appIcon.setImageDrawable(app.stockIcon)
-            } else {
-                if (targetDrawableName != null) {
-                    holder.appIcon.tag = targetDrawableName
-                    val cachedIcon = memoryCache.get(targetDrawableName)
-
-                    if (cachedIcon != null) {
-                        holder.appIcon.setImageDrawable(cachedIcon)
-                    } else {
-                        holder.appIcon.setImageDrawable(app.stockIcon)
-
-                        adapterScope.launch {
-                            val finalDrawable = withContext(Dispatchers.IO) {
-                                val rawDrawable = IconPackHelper.loadIcon(
-                                    adapterContext,
-                                    iconPackList.firstOrNull() ?: "",
-                                    targetDrawableName
-                                )
-
-                                if (rawDrawable != null && isMonetEnabled) {
-                                    applyCustomizedColorToIcon(rawDrawable)
-                                } else {
-                                    rawDrawable
-                                }
-                            }
-
-                            if (finalDrawable != null) {
-                                memoryCache.put(targetDrawableName, finalDrawable)
-
-                                if (holder.appIcon.tag == targetDrawableName) {
-                                    holder.appIcon.setImageDrawable(finalDrawable)
-                                }
+            } else if (sourcePack != null && targetDrawableName != null) {
+                holder.appIcon.tag = targetDrawableName
+                val cachedIcon = memoryCache.get(targetDrawableName)
+                if (cachedIcon != null) {
+                    holder.appIcon.setImageDrawable(cachedIcon)
+                } else {
+                    holder.appIcon.setImageDrawable(app.stockIcon)
+                    adapterScope.launch {
+                        val finalDrawable = withContext(Dispatchers.IO) {
+                            val rawDrawable = IconPackHelper.loadIcon(
+                                adapterContext, sourcePack!!, targetDrawableName!!
+                            )
+                            if (rawDrawable != null && isMonetEnabled) {
+                                applyCustomizedColorToIcon(rawDrawable)
+                            } else { rawDrawable }
+                        }
+                        if (finalDrawable != null) {
+                            memoryCache.put(targetDrawableName!!, finalDrawable)
+                            if (holder.appIcon.tag == targetDrawableName) {
+                                holder.appIcon.setImageDrawable(finalDrawable)
                             }
                         }
                     }
-                } else {
-                    holder.appIcon.tag = app.componentString
-                    holder.appIcon.setImageDrawable(app.stockIcon)
                 }
+            } else {
+                holder.appIcon.tag = app.componentString
+                holder.appIcon.setImageDrawable(app.stockIcon)
             }
 
             holder.itemView.setOnClickListener { openIconPicker(app) }
