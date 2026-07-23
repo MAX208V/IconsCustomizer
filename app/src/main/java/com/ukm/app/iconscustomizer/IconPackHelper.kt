@@ -190,7 +190,10 @@ object IconPackHelper {
     // FALLBACK / GENERIC ICON SUPPORT
     // =========================================================================
 
-    /** 通用兜底图标的常见 drawable 命名（按优先级降序） */
+    /** 常见 overlay 层 drawable 名称 */
+    private val OVERLAY_DRAWABLE_NAMES = listOf("icon_back", "icon_mask", "icon_upon")
+
+    /** 纯兜底通用图标的常见命名（仅当没有 overlay 层时使用） */
     private val FALLBACK_DRAWABLE_NAMES = arrayOf(
         "icon", "default", "app", "app_icon", "ic_default", "anonymous", "ic_launcher"
     )
@@ -213,7 +216,7 @@ object IconPackHelper {
 
     /**
      * 从图标包直接加载通用兜底 drawable（无需合成）
-     * 尝试多种常见命名，找到第一个就返回
+     * 仅在 overlay 合成不可用时作为最后手段
      */
     fun loadFallbackDrawable(context: Context, iconPackPackageName: String): Drawable? {
         for (name in FALLBACK_DRAWABLE_NAMES) {
@@ -391,8 +394,8 @@ object IconPackHelper {
 
     /**
      * 综合获取兜底图标：
-     * 1. 优先尝试直接加载通用 drawable（如 icon / default 等）
-     * 2. 如果不存在，尝试使用 iconback/iconupon/iconmask 合成
+     * 1. 优先尝试 overlay 合成（将原图标与 icon_back/mask/upon 组合），保留原应用图标
+     * 2. 其次尝试直接加载通用 drawable（纯兜底，不保留原图标）
      * 3. 都失败则返回 null
      */
     fun getFallbackIcon(
@@ -400,17 +403,36 @@ object IconPackHelper {
         iconPackPackageName: String,
         originalIcon: Drawable
     ): Drawable? {
-        // 方式一：直接加载通用 drawable
-        val directFallback = loadFallbackDrawable(context, iconPackPackageName)
-        if (directFallback != null) return directFallback
-
-        // 方式二：用 iconback 机制合成
+        // ===== 方式一（优先）：overlay 合成，保留原图标 =====
+        // 先尝试从 appfilter.xml 解析 <iconback>/<iconupon>/<iconmask>
         val overlayInfo = parseFallbackOverlayInfo(context, iconPackPackageName)
         if (overlayInfo != null && overlayInfo.iconBackNames.isNotEmpty()) {
-            return generateOverlayFallbackIcon(context, iconPackPackageName, originalIcon, overlayInfo)
+            val result = generateOverlayFallbackIcon(
+                context, iconPackPackageName, originalIcon, overlayInfo
+            )
+            if (result != null) return result
         }
 
-        return null
+        // 如果 appfilter.xml 没有定义 overlay，尝试直接加载常见名称的 overlay 层
+        val backDrawable = loadIcon(context, iconPackPackageName, "icon_back")
+        if (backDrawable != null) {
+            val maskDrawable = loadIcon(context, iconPackPackageName, "icon_mask")
+            val uponDrawable = loadIcon(context, iconPackPackageName, "icon_upon")
+
+            val directOverlayInfo = FallbackOverlayInfo(
+                scale = 0.85f,
+                iconBackNames = listOf("icon_back"),
+                iconUponNames = if (uponDrawable != null) listOf("icon_upon") else emptyList(),
+                iconMaskNames = if (maskDrawable != null) listOf("icon_mask") else emptyList()
+            )
+            val result = generateOverlayFallbackIcon(
+                context, iconPackPackageName, originalIcon, directOverlayInfo
+            )
+            if (result != null) return result
+        }
+
+        // ===== 方式二（兜底）：直接加载通用 drawable，不保留原图标 =====
+        return loadFallbackDrawable(context, iconPackPackageName)
     }
 
     fun putColorIntoDrawable(
