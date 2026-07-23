@@ -164,7 +164,7 @@ class IconPickerActivity : AppCompatActivity() {
     }
 
     // ====================================================================
-    // Chip 筛选栏
+    // Chip 筛选栏：每个 Chip 显示图标包匹配该应用的专属图标预览
     // ====================================================================
 
     private fun buildChips(chipGroup: ChipGroup) {
@@ -172,21 +172,49 @@ class IconPickerActivity : AppCompatActivity() {
         if (iconPackList.size <= 1) return
         chipGroup.visibility = View.VISIBLE
 
-        for ((idx, pkg) in iconPackList.withIndex()) {
-            val label = packLabels[pkg] ?: pkg
-            val chip = Chip(this).apply {
-                text = label
-                isCheckable = true
-                isChecked = idx == 0 // 默认只选中第一个
-                setOnCheckedChangeListener { _, isChecked ->
-                    if (isChecked) activePacks.add(pkg)
-                    else activePacks.remove(pkg)
-                    adapter.filterActivePacks(activePacks)
+        lifecycleScope.launch {
+            // 并行加载每个包的匹配图标
+            val chipData = withContext(Dispatchers.IO) {
+                iconPackList.map { pkg ->
+                    val label = packLabels[pkg] ?: pkg
+                    // 查找该包 appfilter 中匹配该应用的 drawable
+                    val map = IconPackHelper.getAppFilterMap(this@IconPickerActivity, pkg)
+                    val matchedName = map[componentString] ?: map.entries.firstOrNull {
+                        it.key.startsWith("ComponentInfo{${componentString.substringAfter("{").substringBefore("/")}/")
+                    }?.value
+                    val matchedIcon = if (matchedName != null) {
+                        IconPackHelper.loadIcon(this@IconPickerActivity, pkg, matchedName)
+                    } else null
+                    Triple(pkg, label, matchedIcon)
                 }
             }
-            chipGroup.addView(chip)
+
+            for ((idx, (pkg, label, matchedIcon)) in chipData.withIndex()) {
+                val chip = Chip(this@IconPickerActivity).apply {
+                    text = label
+                    isCheckable = true
+                    isChecked = idx == 0
+                    // 有匹配图标则设为 Chip 图标预览
+                    if (matchedIcon != null) {
+                        chipIcon = matchedIcon
+                        isIconStart = true
+                        chipIconSize = dpToPx(24f)
+                    }
+                    setOnCheckedChangeListener { _, isChecked ->
+                        if (isChecked) activePacks.add(pkg)
+                        else activePacks.remove(pkg)
+                        adapter.filterActivePacks(activePacks)
+                    }
+                }
+                chipGroup.addView(chip)
+            }
         }
     }
+
+    private fun dpToPx(dp: Float): Float =
+        android.util.TypedValue.applyDimension(
+            android.util.TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics
+        )
 
     // ====================================================================
     // 当前图标加载
