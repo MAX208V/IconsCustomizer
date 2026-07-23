@@ -300,17 +300,21 @@ object IconPackHelper {
     }
 
     /**
-     * 使用 ADW 标准的 iconback / iconupon / iconmask 机制
+     * 使用 ADW/Nova 标准的 iconback / iconupon / iconmask 机制
      * 为未适配的应用合成统一风格的兜底图标。
      *
-     * 正确合成顺序：
-     * 1. 将 iconback（背景层）与缩放后的原图标组合在一起
-     * 2. 用 iconmask（蒙版）统一裁剪整个组合，确保背景+图标形状一致
-     * 3. 最后绘制 iconupon（前景装饰层）在最上方
+     * 合成顺序（与 CM11 IconPackHelper.java 一致）：
      *
-     * 所有图层名均来自图标包 appfilter.xml 中定义的
-     * <iconback>/<iconupon>/<iconmask>/<scale> 标签，
-     * 不硬编码具体资源名称。
+     *   1. 画缩放后的原图标                                  → 正常绘制
+     *   2. 用 iconMask 裁剪原图标（DST_OUT）                  → 蒙版透明区域 = 保留图标
+     *   3. 用 iconBack 背景放在最下层（DST_OVER）              → 绘制在当前内容后面
+     *   4. 最后画 iconUpon 前景在最上层                       → 正常绘制
+     *
+     * DST_OUT: 保留目标中来源没有覆盖的部分
+     *   蒙版透明(Sa=0) → 保留图标    蒙版不透明(Sa=1) → 去掉图标
+     *
+     * DST_OVER: 绘制在目标后面
+     *   背景绘制在当前(已裁切的图标)后面
      */
     fun generateOverlayFallbackIcon(
         context: Context,
@@ -319,10 +323,7 @@ object IconPackHelper {
         overlayInfo: FallbackOverlayInfo
     ): Drawable? {
         return try {
-            // 确定合成尺寸
-            val size = if (originalIcon.intrinsicWidth > 0 && originalIcon.intrinsicHeight > 0) {
-                maxOf(originalIcon.intrinsicWidth, originalIcon.intrinsicHeight)
-            } else 192
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
             // 从图标包定义中选取各层（如果有多个变体则随机选一个）
             val backName = overlayInfo.iconBackNames.ifEmpty { null }?.random()
@@ -333,63 +334,54 @@ object IconPackHelper {
             val uponDrawable = uponName?.let { loadIcon(context, iconPackPackageName, it) }
             val maskDrawable = maskName?.let { loadIcon(context, iconPackPackageName, it) }
 
-            // 没有背景层则无法合成
-            if (backDrawable == null) return null
+            // 如果没有背景也没有蒙版，无法合成
+            if (backDrawable == null && maskDrawable == null) return null
+
+            // 确定合成尺寸
+            val size = if (originalIcon.intrinsicWidth > 0 && originalIcon.intrinsicHeight > 0) {
+                maxOf(originalIcon.intrinsicWidth, originalIcon.intrinsicHeight)
+            } else 192
+
+            // 创建画布
+            val bitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
 
             val safeOriginal = originalIcon.mutate()
 
-            // 缩放原图标到指定比例
+            // ===== 第 1 步：画原图标（缩放） =====
             val factor = overlayInfo.scale
-            val scaledSize = (size * factor).toInt().coerceAtLeast(4)
-            val offset = (size - scaledSize) / 2
-            safeOriginal.setBounds(offset, offset, offset + scaledSize, offset + scaledSize)
+            safeOriginal.setBounds(0, 0, size, size)
+            canvas.save()
+            canvas.scale(factor, factor, size / 2f, size / 2f)
+            safeOriginal.draw(canvas)
+            canvas.restore()
 
-            // ===== 第一步：组合背景 + 原图标 =====
-            val composite = createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            Canvas(composite).apply {
-                // 1a. 画背景层（填满整个区域）
+            // ===== 第 2 步：用 iconMask 裁剪原图标 =====
+            // DST_OUT: 保留目标(已画内容)中来源(蒙版)没有覆盖的部分
+            // 蒙版透明(Sa≈0) → 保留图标    蒙版不透明(Sa≈1) → 去掉图标
+            if (maskDrawable != null) {
+                paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+                maskDrawable.setBounds(0, 0, size, size)
+                maskDrawable.draw(canvas)
+                paint.xfermode = null
+            }
+
+            // ===== 第 3 步：用 iconBack 背景放在最下层 =====
+            // DST_OVER: 绘制在当前内容后面
+            if (backDrawable != null) {
+                paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OVER)
                 backDrawable.setBounds(0, 0, size, size)
-                backDrawable.draw(this)
-                // 1b. 画缩放后的原图标在背景之上
-                safeOriginal.draw(this)
+                backDrawable.draw(canvas)
+                paint.xfermode = null
             }
 
-            // ===== 第二步：用蒙版统一裁剪组合结果 =====
-            val masked = if (maskDrawable != null) {
-                val maskBitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
-                Canvas(maskBitmap).apply {
-                    maskDrawable.setBounds(0, 0, size, size)
-                    maskDrawable.draw(this)
-                }
-
-                // 将 composite（背景+图标）用 mask 裁剪
-                val clipped = createBitmap(size, size, Bitmap.Config.ARGB_8888)
-                Canvas(clipped).apply {
-                    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-                    // 先画组合图像（背景+图标）
-                    drawBitmap(composite, 0f, 0f, paint)
-                    // 用蒙版裁剪（DST_IN：保留目标图像中与源图像重叠的部分）
-                    paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-                    drawBitmap(maskBitmap, 0f, 0f, paint)
-                }
-                clipped
-            } else {
-                composite
+            // ===== 第 4 步：最后画前景在最上层 =====
+            if (uponDrawable != null) {
+                uponDrawable.setBounds(0, 0, size, size)
+                uponDrawable.draw(canvas)
             }
 
-            // ===== 第三步：叠加前景装饰层 =====
-            val resultBitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            Canvas(resultBitmap).apply {
-                // 画蒙版裁剪后的组合（背景+图标）
-                drawBitmap(masked, 0f, 0f, null)
-                // 画前景装饰层（在最上方）
-                uponDrawable?.let { d ->
-                    d.setBounds(0, 0, size, size)
-                    d.draw(this)
-                }
-            }
-
-            BitmapDrawable(context.resources, resultBitmap)
+            BitmapDrawable(context.resources, bitmap)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to generate overlay fallback icon: ${e.message}")
             null
