@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.util.Log
@@ -375,7 +376,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                 }
                 // APK icon
                 row.addView(createPackIconView(pkg).apply {
-                    (layoutParams as ViewGroup.MarginLayoutParams).marginEnd = dpToPx(10f).toInt()
+                    (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dpToPx(10f).toInt()
                 })
                 // Priority number badge
                 row.addView(TextView(requireContext()).apply {
@@ -646,7 +647,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
             }
             // APK icon
             row.addView(createPackIconView(pkg).apply {
-                (layoutParams as ViewGroup.MarginLayoutParams).marginEnd = dpToPx(10f).toInt()
+                (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dpToPx(10f).toInt()
             })
             // Badge
             row.addView(TextView(requireContext()).apply {
