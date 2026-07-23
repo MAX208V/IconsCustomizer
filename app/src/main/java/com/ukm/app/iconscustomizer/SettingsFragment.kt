@@ -387,7 +387,6 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                         }
                     })
                 } else {
-                    // 占位
                     row.addView(TextView(requireContext()).apply {
                         layoutParams = LinearLayout.LayoutParams(dpToPx(32f).toInt(), 0)
                     })
@@ -406,20 +405,20 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                         }
                     })
                 }
-                // APK icon
-                row.addView(createPackIconView(pkg).apply {
-                    (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dpToPx(10f).toInt()
-                })
-                // Priority number badge
+                // 优先级编号
                 row.addView(TextView(requireContext()).apply {
                     text = "${idx + 1}."
                     textSize = 14f
                     setTypeface(null, android.graphics.Typeface.BOLD)
                     setTextColor(ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_on_surface_emphasis_high_type))
                     layoutParams = LinearLayout.LayoutParams(
-                        dpToPx(32f).toInt(),
+                        dpToPx(28f).toInt(),
                         ViewGroup.LayoutParams.WRAP_CONTENT
                     )
+                })
+                // APK 图标
+                row.addView(createPackIconView(pkg).apply {
+                    (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dpToPx(10f).toInt()
                 })
                 // Pack name
                 row.addView(TextView(requireContext()).apply {
@@ -677,11 +676,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                     dpToPx(16f).toInt(), dpToPx(4f).toInt()
                 )
             }
-            // APK icon
-            row.addView(createPackIconView(pkg).apply {
-                (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dpToPx(10f).toInt()
-            })
-            // Badge
+            // 优先级编号
             row.addView(TextView(requireContext()).apply {
                 text = "${idx + 1}"
                 textSize = 11f
@@ -689,7 +684,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                 gravity = android.view.Gravity.CENTER
                 val size = dpToPx(22f).toInt()
                 layoutParams = LinearLayout.LayoutParams(size, size).apply {
-                    setMargins(0, 0, dpToPx(10f).toInt(), 0)
+                    setMargins(0, 0, dpToPx(6f).toInt(), 0)
                 }
                 background = GradientDrawable().apply {
                     setColor(Color.parseColor("#33000000"))
@@ -697,7 +692,11 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                 }
                 setTextColor(Color.parseColor("#99000000"))
             })
-            // Name
+            // APK 图标
+            row.addView(createPackIconView(pkg).apply {
+                (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dpToPx(10f).toInt()
+            })
+            // 包名
             row.addView(TextView(requireContext()).apply {
                 text = label
                 textSize = 14f
