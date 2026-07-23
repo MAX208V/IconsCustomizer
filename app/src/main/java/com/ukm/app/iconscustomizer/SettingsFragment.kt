@@ -373,6 +373,10 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                     gravity = android.view.Gravity.CENTER_VERTICAL
                     setPadding(dpToPx(4f).toInt(), dpToPx(8f).toInt(), 0, dpToPx(8f).toInt())
                 }
+                // APK icon
+                row.addView(createPackIconView(pkg).apply {
+                    (layoutParams as ViewGroup.MarginLayoutParams).marginEnd = dpToPx(10f).toInt()
+                })
                 // Priority number badge
                 row.addView(TextView(requireContext()).apply {
                     text = "${idx + 1}."
@@ -605,7 +609,24 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         view.findViewById<View>(R.id.div_clock_color).visibility = vClock
     }
 
-    /** Build inline list of priority packs with remove buttons */
+    /** 加载图标包 App 自身的图标 */
+    private fun loadPackIcon(packageName: String): Drawable? {
+        return try {
+            val pm = requireContext().packageManager
+            pm.getApplicationIcon(packageName)
+        } catch (_: Exception) { null }
+    }
+
+    /** 创建带 APK 图标的 ImageView（统一的尺寸和圆角） */
+    private fun createPackIconView(packageName: String): ImageView {
+        val iconView = ImageView(requireContext())
+        val iconSizeDp = dpToPx(28f).toInt()
+        iconView.layoutParams = LinearLayout.LayoutParams(iconSizeDp, iconSizeDp)
+        iconView.scaleType = ImageView.ScaleType.FIT_CENTER
+        loadPackIcon(packageName)?.let { iconView.setImageDrawable(it) }
+        return iconView
+    }
+
     private fun buildPackListInline(packs: List<String>) {
         iconPackContainer.removeAllViews()
         if (packs.isEmpty()) {
@@ -623,6 +644,10 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                     dpToPx(16f).toInt(), dpToPx(4f).toInt()
                 )
             }
+            // APK icon
+            row.addView(createPackIconView(pkg).apply {
+                (layoutParams as ViewGroup.MarginLayoutParams).marginEnd = dpToPx(10f).toInt()
+            })
             // Badge
             row.addView(TextView(requireContext()).apply {
                 text = "${idx + 1}"

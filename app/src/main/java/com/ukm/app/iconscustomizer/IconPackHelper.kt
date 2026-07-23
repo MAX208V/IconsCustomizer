@@ -418,15 +418,59 @@ object IconPackHelper {
     }
 
     /**
+     * 生成内置通用兜底图标。
+     * 当图标包没有提供任何 <iconback>/<iconmask> 或通用 drawable 时使用。
+     *
+     * 样式：浅色圆角矩形背景 + 居中缩小的原图标
+     */
+    fun generateBuiltInFallbackIcon(
+        context: Context,
+        originalIcon: Drawable,
+        size: Int = 192
+    ): Drawable? {
+        return try {
+            val bitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+            // 圆角矩形背景（使用半透明白色，在任何壁纸上都有柔和效果）
+            val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.parseColor("#18FFFFFF")
+            }
+            val radius = size * 0.18f
+            canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, bgPaint)
+
+            // 选中边框
+            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.parseColor("#0DFFFFFF")
+                style = Paint.Style.STROKE
+                strokeWidth = 2f
+            }
+            canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, strokePaint)
+
+            // 居中画缩放后的原图标
+            val icon = originalIcon.mutate()
+            val scale = 0.65f
+            icon.setBounds(0, 0, size, size)
+            canvas.save()
+            canvas.scale(scale, scale, size / 2f, size / 2f)
+            icon.draw(canvas)
+            canvas.restore()
+
+            BitmapDrawable(context.resources, bitmap)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate built-in fallback: ${e.message}")
+            null
+        }
+    }
+
+    /**
      * 综合获取兜底图标：
      *
-     * 只读取图标包 appfilter.xml 中定义的兜底图标组合。
-     * 不硬编码任何资源名，一切以图标包自身的定义为准。
-     *
-     * 1. 优先从 appfilter.xml 读 <iconback>/<iconupon>/<iconmask>/<scale>
-     *    用这些定义将原图标与背景/蒙版/前景组合
-     * 2. 如果图标包没有定义 overlay，尝试直接加载通用 drawable（纯兜底）
-     * 3. 都失败则返回 null
+     * 1. 从 appfilter.xml 读 <iconback>/<iconupon>/<iconmask>/<scale>
+     *    用这些定义将原图标与背景/蒙版/前景组合（ADW 标准）
+     * 2. 如果图标包没有定义 overlay，尝试直接加载通用 drawable
+     * 3. 都失败则使用内置兜底图标（圆角矩形+居中图标）
      */
     fun getFallbackIcon(
         context: Context,
@@ -442,8 +486,12 @@ object IconPackHelper {
             if (result != null) return result
         }
 
-        // ===== 方式二（兜底）：直接加载通用 drawable =====
-        return loadFallbackDrawable(context, iconPackPackageName)
+        // ===== 方式二：直接加载通用 drawable =====
+        val generic = loadFallbackDrawable(context, iconPackPackageName)
+        if (generic != null) return generic
+
+        // ===== 方式三（最终兜底）：内置通用图标 =====
+        return generateBuiltInFallbackIcon(context, originalIcon)
     }
 
     fun putColorIntoDrawable(
