@@ -23,6 +23,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
 import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -341,7 +344,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         val prefs = getRemotePrefs() ?: return
         val packs = getIconPackList(prefs).toMutableList()
 
-        // Build dialog content
+        // 对话框内容容器
         val scrollContent = FrameLayout(requireContext()).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -350,111 +353,94 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         }
         val container = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(
-                dpToPx(8f).toInt(), dpToPx(8f).toInt(),
-                dpToPx(8f).toInt(), dpToPx(4f).toInt()
-            )
+            setPadding(dpToPx(4f).toInt(), dpToPx(4f).toInt(), dpToPx(4f).toInt(), dpToPx(4f).toInt())
         }
         scrollContent.addView(container)
 
-        // List of packs
-        val packListContainer = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.VERTICAL
+        // RecyclerView（支持拖拽排序）
+        val recyclerView = RecyclerView(requireContext()).apply {
+            layoutManager = LinearLayoutManager(requireContext())
             id = View.generateViewId()
+            overScrollMode = View.OVER_SCROLL_NEVER
         }
-        container.addView(packListContainer)
+        container.addView(recyclerView)
 
-        fun refreshPackList() {
-            packListContainer.removeAllViews()
-            packs.forEachIndexed { idx, pkg ->
+        // 适配器
+        class PackAdapter : RecyclerView.Adapter<PackAdapter.VH>() {
+            inner class VH(view: View) : RecyclerView.ViewHolder(view) {
+                val dragHandle: TextView = view.findViewById(R.id.dragHandle)
+                val number: TextView = view.findViewById(R.id.itemNumber)
+                val icon: ImageView = view.findViewById(R.id.itemIcon)
+                val name: TextView = view.findViewById(R.id.itemName)
+                val removeBtn: TextView = view.findViewById(R.id.itemRemove)
+            }
+
+            override fun onCreateViewHolder(parent: ViewGroup, type: Int): VH {
+                val view = LayoutInflater.from(parent.context).inflate(R.layout.item_pack_drag, parent, false)
+                return VH(view)
+            }
+
+            override fun getItemCount(): Int = packs.size
+
+            override fun onBindViewHolder(h: VH, pos: Int) {
+                val pkg = packs[pos]
                 val label = getIconPackLabel(pkg)
-                val row = LinearLayout(requireContext()).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = android.view.Gravity.CENTER_VERTICAL
-                    setPadding(dpToPx(4f).toInt(), dpToPx(6f).toInt(), 0, dpToPx(6f).toInt())
+                h.number.text = "${pos + 1}"
+                h.name.text = label
+                loadPackIcon(pkg)?.let { h.icon.setImageDrawable(it) }
+                h.removeBtn.setOnClickListener {
+                    packs.removeAt(pos)
+                    notifyDataSetChanged()
                 }
-                // 上移按钮
-                if (idx > 0) {
-                    row.addView(TextView(requireContext()).apply {
-                        text = "▲"
-                        textSize = 14f
-                        setPadding(dpToPx(8f).toInt(), dpToPx(4f).toInt(), dpToPx(8f).toInt(), dpToPx(4f).toInt())
-                        setTextColor(ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_dynamic_primary50))
-                        setOnClickListener {
-                            val item = packs.removeAt(idx)
-                            packs.add(idx - 1, item)
-                            refreshPackList()
-                        }
-                    })
-                } else {
-                    row.addView(TextView(requireContext()).apply {
-                        layoutParams = LinearLayout.LayoutParams(dpToPx(32f).toInt(), 0)
-                    })
-                }
-                // 下移按钮
-                if (idx < packs.size - 1) {
-                    row.addView(TextView(requireContext()).apply {
-                        text = "▼"
-                        textSize = 14f
-                        setPadding(dpToPx(4f).toInt(), dpToPx(4f).toInt(), dpToPx(8f).toInt(), dpToPx(4f).toInt())
-                        setTextColor(ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_dynamic_primary50))
-                        setOnClickListener {
-                            val item = packs.removeAt(idx)
-                            packs.add(idx + 1, item)
-                            refreshPackList()
-                        }
-                    })
-                }
-                // 优先级编号
-                row.addView(TextView(requireContext()).apply {
-                    text = "${idx + 1}."
-                    textSize = 14f
-                    setTypeface(null, android.graphics.Typeface.BOLD)
-                    setTextColor(ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_on_surface_emphasis_high_type))
-                    layoutParams = LinearLayout.LayoutParams(
-                        dpToPx(28f).toInt(),
-                        ViewGroup.LayoutParams.WRAP_CONTENT
-                    )
-                })
-                // APK 图标
-                row.addView(createPackIconView(pkg).apply {
-                    (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dpToPx(10f).toInt()
-                })
-                // Pack name
-                row.addView(TextView(requireContext()).apply {
-                    text = label
-                    textSize = 15f
-                    layoutParams = LinearLayout.LayoutParams(
-                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
-                    )
-                })
-                // Remove button
-                row.addView(TextView(requireContext()).apply {
-                    text = getString(R.string.remove_icon_pack)
-                    textSize = 12f
-                    setTextColor(ContextCompat.getColor(requireContext(), com.google.android.material.R.color.material_dynamic_primary50))
-                    setPadding(dpToPx(8f).toInt(), dpToPx(4f).toInt(), dpToPx(8f).toInt(), dpToPx(4f).toInt())
-                    setOnClickListener {
-                        packs.removeAt(idx)
-                        refreshPackList()
-                    }
-                })
-                packListContainer.addView(row)
-            }
-            // Show hint when empty
-            if (packs.isEmpty()) {
-                packListContainer.addView(TextView(requireContext()).apply {
-                    text = getString(R.string.icon_pack_none)
-                    textSize = 14f
-                    alpha = 0.6f
-                    setPadding(0, dpToPx(12f).toInt(), 0, dpToPx(12f).toInt())
-                })
             }
         }
 
-        refreshPackList()
+        val adapter = PackAdapter()
+        recyclerView.adapter = adapter
 
-        // Add button
+        // 拖拽排序
+        val touchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
+            override fun onMove(rv: RecyclerView, dragged: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                val from = dragged.adapterPosition
+                val to = target.adapterPosition
+                if (from < 0 || to < 0) return false
+                val item = packs.removeAt(from)
+                packs.add(to, item)
+                adapter.notifyItemMoved(from, to)
+                return true
+            }
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+            override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+                super.onSelectedChanged(viewHolder, actionState)
+                if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                    viewHolder?.itemView?.alpha = 0.7f
+                }
+            }
+            override fun clearView(rv: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(rv, viewHolder)
+                viewHolder.itemView.alpha = 1f
+            }
+        })
+        touchHelper.attachToRecyclerView(recyclerView)
+
+        // 长按拖拽手柄启动拖拽
+        adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+            override fun onChanged() {
+                for (i in 0 until recyclerView.childCount) {
+                    val child = recyclerView.getChildAt(i)
+                    val vh = recyclerView.getChildViewHolder(child)
+                    if (vh is PackAdapter.VH) {
+                        vh.dragHandle.setOnLongClickListener {
+                            touchHelper.startDrag(vh)
+                            true
+                        }
+                    }
+                }
+            }
+        })
+
+        // 添加图标包按钮
         val addBtn = MaterialButton(requireContext(), null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = getString(R.string.add_icon_pack)
             layoutParams = LinearLayout.LayoutParams(
@@ -462,7 +448,6 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dpToPx(12f).toInt() }
             setOnClickListener {
-                // Available packs = installed packs not already in the list
                 val available = installedIconPacks.filter { it.packageName !in packs }
                 if (available.isEmpty()) {
                     Toast.makeText(requireContext(), getString(R.string.all_packs_added), Toast.LENGTH_SHORT).show()
@@ -474,7 +459,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                     .setTitle(getString(R.string.add_icon_pack))
                     .setItems(names) { _, which ->
                         packs.add(pkgs[which])
-                        refreshPackList()
+                        adapter.notifyDataSetChanged()
                     }
                     .setNegativeButton(getString(R.string.cancel), null)
                     .show()
@@ -692,11 +677,11 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
                 }
                 setTextColor(Color.parseColor("#99000000"))
             })
-            // APK 图标
+            // APK 图标（右边距 6dp 产生图标与名称之间的间隔）
             row.addView(createPackIconView(pkg).apply {
-                (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dpToPx(10f).toInt()
+                (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dpToPx(6f).toInt()
             })
-            // 包名
+            // 包名（紧接着图标，无额外间距）
             row.addView(TextView(requireContext()).apply {
                 text = label
                 textSize = 14f
