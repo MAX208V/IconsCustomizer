@@ -37,7 +37,7 @@
     <!-- Settings - Dock -->
     <string name="enable_dock">Enable Dock</string>
     <string name="dock_corners">Dock Corner Radius</string>
-    <string name="theme_dock_folders">Theme Dock and Folders</string>
+    <string name="theme_dock_folders">Dock &amp; Folder Color</string>
     <string name="dock_opacity">Dock Folder Opacity</string>
     <string name="dock_bg_color">Dock And Folder Background Color</string>
 

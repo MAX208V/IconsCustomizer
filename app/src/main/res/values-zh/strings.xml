@@ -38,7 +38,7 @@
     <!-- 设置 - Dock -->
     <string name="enable_dock">启用 Dock</string>
     <string name="dock_corners">Dock 圆角半径</string>
-    <string name="theme_dock_folders">主题 Dock 和文件夹</string>
+    <string name="theme_dock_folders">Dock和文件夹 颜色</string>
     <string name="dock_opacity">Dock 文件夹不透明度</string>
     <string name="dock_bg_color">Dock 和文件夹背景颜色</string>
 
