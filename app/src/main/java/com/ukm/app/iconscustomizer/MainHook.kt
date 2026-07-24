@@ -540,8 +540,14 @@ class MainHook : XposedModule() {
         // ===== 阶段 1：检查所有图标包的手动覆盖 =====
         for (pkg in iconPackList) {
             val manualOverrideKey = "custom_icon_${pkg}_$exactComponentString"
-            val manualDrawableName = prefManager?.getString(manualOverrideKey, null)
-
+            // 优先从远程 pref 读取（由 UIHelpers.pushRemotePref 写入）
+            var manualDrawableName = prefManager?.getString(manualOverrideKey, null)
+            // 兜底：从本地 pref 读取（应对远程写入失败的场景）
+            if (manualDrawableName.isNullOrEmpty()) {
+                manualDrawableName = launcherContext?.getSharedPreferences(
+                    MainActivity.PREF_NAME, Context.MODE_PRIVATE
+                )?.getString(manualOverrideKey, null)
+            }
             if (!manualDrawableName.isNullOrEmpty()) {
                 val manualCustomDrawable = IconPackHelper.loadIcon(
                     launcherContext!!,
