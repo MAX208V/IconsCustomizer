@@ -680,6 +680,16 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         view.findViewById<View>(R.id.row_icon_pack_list).visibility = vTheming
         view.findViewById<View>(R.id.div_icon_pack).visibility = vTheming
         iconPackContainer.visibility = vTheming
+        // 通用兜底图标相关项在主题关闭时也隐藏
+        if (!isThemingEnabled) {
+            divAfterFallbackSwitch.visibility = View.GONE
+            rowFallbackPack.visibility = View.GONE
+            divAfterFallbackPack.visibility = View.GONE
+            rowFallbackSize.visibility = View.GONE
+        } else {
+            // 主题开启时，按 fallback 开关状态显示
+            updateFallbackVisibility(switchFallbackIcons.isChecked)
+        }
         rowFallbackPack.visibility = vTheming
         view.findViewById<View>(R.id.title_monet_colors).visibility = vTheming
         view.findViewById<View>(R.id.card_monet_colors).visibility = vTheming
