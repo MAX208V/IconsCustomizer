@@ -667,7 +667,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         updateColorPreview(
             view,
             R.id.img_preview_dock_bg,
-            prefs.getInt("monet_folder_dock_bg_color", 0)
+            prefs.getInt("monet_folder_dock_bg_color", android.R.color.system_neutral1_0)
         )
         updateColorPreview(view, R.id.img_preview_clock, prefs.getInt("monet_clock_color", 0))
 

@@ -47,7 +47,7 @@ class MainHook : XposedModule() {
     private var isFallbackEnabled: Boolean = false
     private var isThemedClockEnabled: Boolean = false
     private var isThemeDockFolderEnabled: Boolean = false
-    private var dockFolderBgColor: Int = 0
+    private var dockFolderBgColor: Int = Resources.color.system_neutral1_0
     private var clockWidgetColor: Int = 0
     private var isDockEnabled: Boolean = false
     private var dockFolderOpacity = 200
@@ -85,7 +85,7 @@ class MainHook : XposedModule() {
 
                 dockCornerRadius = prefManager?.getInt("dock_corner_radius", 60) ?: 60
                 if (isThemeDockFolderEnabled) {
-                    dockFolderBgColor = prefManager?.getInt("monet_folder_dock_bg_color", 0) ?: 0
+                    dockFolderBgColor = prefManager?.getInt("monet_folder_dock_bg_color", Resources.color.system_neutral1_0) ?: Resources.color.system_neutral1_0
                     dockFolderOpacity = prefManager?.getInt("dock_folder_opacity", 200) ?: 200
                 }
                 if (isThemedClockEnabled) {
