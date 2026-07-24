@@ -188,7 +188,7 @@ class IconPickerActivity : AppCompatActivity() {
                     val label = packLabels[pkg] ?: pkg
                     val map = IconPackHelper.getAppFilterMap(this@IconPickerActivity, pkg)
                     val matchedName = map[componentString] ?: map.entries.firstOrNull {
-                        it.key.startsWith("ComponentInfo{${componentString.substringAfter("{\").substringBefore("/")}/")
+                        it.key.startsWith("ComponentInfo{${componentString.substringAfter("{").substringBefore("/")}/")
                     }?.value ?: ""
                     val matchedIcon = if (matchedName.isNotEmpty()) {
                         IconPackHelper.loadIcon(this@IconPickerActivity, pkg, matchedName)
