@@ -422,12 +422,13 @@ object IconPackHelper {
      * 当图标包没有提供任何 <iconback>/<iconmask> 或通用 drawable 时使用。
      *
      * 样式：浅色圆角矩形背景 + 居中缩小的原图标
-     * 输出始终为 192x192 的 bitmap，通过调整内边距+图标缩放实现视觉大小变化：
-     *   size=180（基准）→ 12% 内边距 + 65% 图标缩放
-     *   size=250（最大）→ ~8.6% 内边距 + ~90% 图标缩放（显大）
-     *   size=100（最小）→ ~35% 内边距 + ~32% 图标缩放（显小）
      *
-     * @param size 视觉大小因子（180=基准，100-250范围）
+     * 实现等比缩放：背景填充比 + 图标缩放按同一比例 (size/180) 变化。
+     *   size=180（基准）→ 背景占 76%，图标占 65%
+     *   size=250（最大）→ 背景占 100%（填满），图标占 ~90%
+     *   size=100（最小）→ 背景占 ~42%，图标占 ~36%
+     *
+     * @param size 视觉大小因子（180=基准，通过统一缩放背景+图标实现显式尺寸变化）
      */
     fun generateBuiltInFallbackIcon(
         context: Context,
@@ -435,21 +436,22 @@ object IconPackHelper {
         size: Int
     ): Drawable? {
         return try {
-            // 固定输出画布尺寸，避免 launcher 缩放导致视觉大小不变
+            // 固定输出画布尺寸（与 launcher 图标网格匹配）
             val outputSize = 192
-
-            // 视觉缩放因子：180=基准(12%内边距+0.65原图标缩放)
-            // 小于180→更多内边距、更小图标（显小）
-            // 大于180→更少内边距、更大图标（显大）
             val defaultSize = 180f
+
+            // 统一视觉缩放因子：size=180 → 1.0x（基准）
+            // size=250 → ~1.39x，整体缩放（含背景+图标），最多充满画布
+            // size=100（旧范围）→ ~0.56x，整体缩小，留白边更多
             val visualFactor = size.toFloat() / defaultSize
 
-            // 内边距反向调节：数值越大内边距越小（图标显大）
-            val basePad = outputSize * 0.12f
-            val pad = (basePad / visualFactor).coerceIn(
-                outputSize * 0.03f,  // min 3% → 图标几乎填满
-                outputSize * 0.35f   // max 35% → 图标很小
-            )
+            // 基准：内边距 12%，图标缩放 65%
+            // 按 visualFactor 统一缩放两者，实现真正的等比放大/缩小效果
+            val fillRatio = (1f - 0.24f) * visualFactor  // 0.24 = 2*0.12 baseline padding
+            val clampedRatio = fillRatio.coerceIn(0.2f, 1.0f)
+            val pad = outputSize * (1f - clampedRatio) / 2f
+            val iconScale = (0.65f * visualFactor).coerceIn(0.15f, 1.0f)
+
             val bgRadius = (outputSize - pad * 2) * 0.2f
 
             val bitmap = createBitmap(outputSize, outputSize, Bitmap.Config.ARGB_8888)
@@ -471,7 +473,6 @@ object IconPackHelper {
 
             // 居中画缩放后的原图标
             val icon = originalIcon.mutate()
-            val iconScale = (0.65f * visualFactor).coerceIn(0.35f, 1.0f)
             icon.setBounds(0, 0, outputSize, outputSize)
             canvas.save()
             canvas.scale(iconScale, iconScale, outputSize / 2f, outputSize / 2f)
