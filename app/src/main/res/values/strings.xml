@@ -50,10 +50,10 @@
     <string name="show_themed_icons">Show Themed Icons</string>
     <string name="custom_override">Custom override: %s</string>
     <string name="default_pack_icon">Using default pack icon</string>
-    <string name="unthemed_stock">Unthemed / Stock</string>
+    <string name="unthemed_stock">Uncustomized / Stock</string>
     <string name="icon_picker_title">Select Icon</string>
     <string name="search_icons">Search icons…</string>
-    <string name="currently_theming">Currently Theming</string>
+    <string name="currently_theming">Custom Icon</string>
     <string name="current_label">CURRENT</string>
     <string name="icon_reset">Icon reset to default</string>
     <string name="reset_default">Reset to Default Icon</string>

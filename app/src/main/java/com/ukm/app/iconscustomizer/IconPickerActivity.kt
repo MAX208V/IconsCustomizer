@@ -292,6 +292,7 @@ class IconPickerActivity : AppCompatActivity() {
     private suspend fun loadCurrentIcon(imageView: ImageView) {
         val prefs = App.mService?.getRemotePreferences(MainActivity.PREF_NAME)
             ?: getSharedPreferences(MainActivity.PREF_NAME, MODE_PRIVATE)
+        val currentLabel = findViewById<TextView>(R.id.currentLabel)
 
         // 检查所有图标包的手动覆盖
         for (pkg in iconPackList) {
@@ -301,7 +302,11 @@ class IconPickerActivity : AppCompatActivity() {
                 val d = withContext(Dispatchers.IO) {
                     IconPackHelper.loadIcon(this@IconPickerActivity, pkg, drawableName)
                 }
-                if (d != null) { imageView.setImageDrawable(d); return }
+                if (d != null) {
+                    imageView.setImageDrawable(d)
+                    currentLabel.text = packLabels[pkg] ?: pkg
+                    return
+                }
             }
         }
 
@@ -317,11 +322,16 @@ class IconPickerActivity : AppCompatActivity() {
                 val d = withContext(Dispatchers.IO) {
                     IconPackHelper.loadIcon(this@IconPickerActivity, pkg, dn)
                 }
-                if (d != null) { imageView.setImageDrawable(d); return }
+                if (d != null) {
+                    imageView.setImageDrawable(d)
+                    currentLabel.text = packLabels[pkg] ?: pkg
+                    return
+                }
             }
         }
 
         // 回退到原生图标
+        currentLabel.text = getString(R.string.unthemed_stock)
         loadStockAppIcon(imageView)
     }
 
@@ -339,7 +349,13 @@ class IconPickerActivity : AppCompatActivity() {
     private fun saveIconChoice(entry: IconEntry) {
         val manualOverrideKey = "custom_icon_${entry.pack}_$componentString"
         UIHelpers.pushLocalPref(this, manualOverrideKey, entry.drawableName)
-        UIHelpers.pushRemotePref(manualOverrideKey, entry.drawableName)
+        // 确保远程 pref 已保存，否则回退本地
+        val saved = UIHelpers.pushRemotePref(manualOverrideKey, entry.drawableName)
+        if (!saved) {
+            // 远程保存失败时手动写本地并通知
+            val localPrefs = getSharedPreferences(MainActivity.PREF_NAME, MODE_PRIVATE)
+            localPrefs.edit(commit = true) { putString(manualOverrideKey, entry.drawableName) }
+        }
         Toast.makeText(this, getString(R.string.icon_set, entry.drawableName, entry.packLabel), Toast.LENGTH_SHORT).show()
         finish()
     }

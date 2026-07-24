@@ -51,10 +51,10 @@
     <string name="show_themed_icons">显示主题图标</string>
     <string name="custom_override">自定义覆盖：%s</string>
     <string name="default_pack_icon">使用默认图标包图标</string>
-    <string name="unthemed_stock">未主题 / 原生</string>
+    <string name="unthemed_stock">未自定义 / 原生</string>
     <string name="icon_picker_title">选择图标</string>
     <string name="search_icons">搜索图标…</string>
-    <string name="currently_theming">正在主题化</string>
+    <string name="currently_theming">自定义图标</string>
     <string name="current_label">当前</string>
     <string name="icon_reset">图标已恢复默认</string>
     <string name="reset_default">恢复默认图标</string>
