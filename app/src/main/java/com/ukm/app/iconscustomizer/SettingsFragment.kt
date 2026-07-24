@@ -51,6 +51,9 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
     lateinit var iconPackContainer: LinearLayout
     lateinit var rowFallbackPack: LinearLayout
     lateinit var tvFallbackPack: TextView
+    lateinit var rowFallbackSize: LinearLayout
+    lateinit var divAfterFallbackSwitch: View
+    lateinit var divAfterFallbackPack: View
     lateinit var rowApplyCustom: LinearLayout
     lateinit var sliderIconSize: Slider
     lateinit var sliderFallbackIconSize: Slider
@@ -123,6 +126,14 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         }
     }
 
+    private fun updateFallbackVisibility(visible: Boolean) {
+        val v = if (visible) View.VISIBLE else View.GONE
+        divAfterFallbackSwitch.visibility = v
+        rowFallbackPack.visibility = v
+        divAfterFallbackPack.visibility = v
+        rowFallbackSize.visibility = v
+    }
+
     private fun setupInteractions(view: View) {
         switchEnableTheming = view.findViewById(R.id.switch_enable_theming)
         switchHomescreenOnly = view.findViewById(R.id.switch_homescreen_only)
@@ -132,6 +143,9 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         iconPackContainer = view.findViewById(R.id.icon_pack_container)
         rowFallbackPack = view.findViewById(R.id.row_fallback_icon_pack)
         tvFallbackPack = view.findViewById(R.id.tv_fallback_pack)
+        rowFallbackSize = view.findViewById(R.id.row_fallback_icon_size)
+        divAfterFallbackSwitch = view.findViewById(R.id.div_after_fallback_switch)
+        divAfterFallbackPack = view.findViewById(R.id.div_after_fallback_pack)
         rowApplyCustom = view.findViewById(R.id.row_apply_custom)
         sliderIconSize = view.findViewById(R.id.slider_icon_size)
         sliderFallbackIconSize = view.findViewById(R.id.slider_fallback_icon_size)
@@ -155,6 +169,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
 
         switchFallbackIcons.setOnCheckedChangeListener { _, isChecked ->
             if (isUpdatingUI) return@setOnCheckedChangeListener
+            updateFallbackVisibility(isChecked)
             if (mService != null) {
                 UIHelpers.pushRemotePref("enable_fallback_icons", isChecked)
                 UIHelpers.restartLauncher(requireContext())
@@ -623,6 +638,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         switchEnableTheming.isChecked = isThemingEnabled
         switchHomescreenOnly.isChecked = prefs.getBoolean("themed_icons_homescreen_only", false)
         switchFallbackIcons.isChecked = prefs.getBoolean("enable_fallback_icons", true)
+        updateFallbackVisibility(switchFallbackIcons.isChecked)
         switchMonet.isChecked = isMonetCustomization
         switchEnableDock.isChecked = prefs.getBoolean("enable_dock", false)
         switchEnableMonetDockFolder.isChecked = isThemeDockFolder

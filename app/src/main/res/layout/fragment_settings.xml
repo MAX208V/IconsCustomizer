@@ -108,6 +108,7 @@
                     android:visibility="gone" />
 
                 <com.google.android.material.divider.MaterialDivider
+                    android:id="@+id/div_after_fallback_switch"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
 
@@ -138,10 +139,12 @@
                 </LinearLayout>
 
                 <com.google.android.material.divider.MaterialDivider
+                    android:id="@+id/div_after_fallback_pack"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
 
                 <LinearLayout
+                    android:id="@+id/row_fallback_icon_size"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"

@@ -10,8 +10,8 @@
 
     <!-- Settings - Icons -->
     <string name="enable_theming">Allow Custom Icon Packs</string>
-    <string name="homescreen_only">Theme Home Screen Icons Only</string>
-    <string name="enable_fallback">Use Generic Icons for Unmapped Apps</string>
+    <string name="homescreen_only">Replace only installed apps</string>
+    <string name="enable_fallback">Generic icons for unmapped apps</string>
     <string name="icon_pack_priority">Icon Pack Priority</string>
     <string name="icon_pack_summary">%d packs configured</string>
     <string name="icon_pack_none">No packs configured</string>

@@ -11,8 +11,8 @@
 
     <!-- 设置 - 图标 -->
     <string name="enable_theming">允许自定义图标包</string>
-    <string name="homescreen_only">仅主题主屏幕图标</string>
-    <string name="enable_fallback">为未适配应用使用通用兜底图标</string>
+    <string name="homescreen_only">仅替换已安装应用</string>
+    <string name="enable_fallback">为未适配应用图标</string>
     <string name="icon_pack_priority">图标包优先级</string>
     <string name="icon_pack_summary">已配置 %d 个图标包</string>
     <string name="icon_pack_none">未配置图标包</string>
