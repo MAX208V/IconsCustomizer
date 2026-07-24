@@ -439,14 +439,14 @@ object IconPackHelper {
             val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = android.graphics.Color.parseColor("#18FFFFFF")
             }
-            val radius = size * 0.12f
+            val radius = size * 0.2f
             canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, bgPaint)
 
             // 选中边框
             val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = android.graphics.Color.parseColor("#0DFFFFFF")
                 style = Paint.Style.STROKE
-                strokeWidth = 2f
+                strokeWidth = 1.5f
             }
             canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, strokePaint)
 
