@@ -23,7 +23,7 @@ object UIHelpers {
         val service = App.mService ?: return false
         val remotePrefs = service.getRemotePreferences(PREF_NAME)
 
-        remotePrefs.edit {
+        remotePrefs.edit(commit = true) {
             when (newValue) {
                 is String -> putString(changedKey, newValue.trim())
                 is Boolean -> putBoolean(changedKey, newValue)
