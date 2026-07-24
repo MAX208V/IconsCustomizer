@@ -54,7 +54,7 @@ class MainHook : XposedModule() {
     private var dockCornerRadius = 60
     private var iconSize: Int = 180
     /** 通用兜底图标大小 */
-    private var fallbackIconSize: Int = 150
+    private var fallbackIconSize: Int = 180
 
     /** 缓存：key="pack:component", value=drawableName */
     private val resolvedCache = ConcurrentHashMap<String, String>()
@@ -93,7 +93,7 @@ class MainHook : XposedModule() {
                 }
 
                 iconSize = prefManager?.getInt("icon_size", 180) ?: 180
-                fallbackIconSize = prefManager?.getInt("fallback_icon_size", 150) ?: 150
+                fallbackIconSize = prefManager?.getInt("fallback_icon_size", 180) ?: 180
                 hookLauncher(packageParam)
             }
 

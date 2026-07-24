@@ -628,7 +628,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         switchEnableMonetDockFolder.isChecked = isThemeDockFolder
         switchMonetClock.isChecked = isThemeClockWidget
         sliderIconSize.value = iconSize
-        sliderFallbackIconSize.value = prefs.getInt("fallback_icon_size", 150).toFloat()
+        sliderFallbackIconSize.value = prefs.getInt("fallback_icon_size", 180).toFloat()
         sliderDockOpacity.value = dockOpacity
         sliderDockCornerRadius.value = dockRadius
         isUpdatingUI = false
