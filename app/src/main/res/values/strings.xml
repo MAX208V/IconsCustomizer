@@ -22,6 +22,7 @@
     <string name="fallback_icon_pack_summary">Which pack to use for generic fallback icons</string>
     <string name="apply_custom_icon">Apply Custom Icon to Specific Apps</string>
     <string name="icon_size">Icon Size</string>
+    <string name="fallback_icon_size">Fallback Icon Size</string>
     <string name="restart_launcher">Restart Launcher</string>
     <string name="launcher_restarted">Launcher Restarted</string>
     <string name="error_restarting">Error Restarting</string>

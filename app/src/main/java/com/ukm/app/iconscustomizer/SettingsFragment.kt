@@ -53,6 +53,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
     lateinit var tvFallbackPack: TextView
     lateinit var rowApplyCustom: LinearLayout
     lateinit var sliderIconSize: Slider
+    lateinit var sliderFallbackIconSize: Slider
 
     lateinit var sliderDockCornerRadius: Slider
     lateinit var switchMonet: MaterialSwitch
@@ -133,6 +134,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         tvFallbackPack = view.findViewById(R.id.tv_fallback_pack)
         rowApplyCustom = view.findViewById(R.id.row_apply_custom)
         sliderIconSize = view.findViewById(R.id.slider_icon_size)
+        sliderFallbackIconSize = view.findViewById(R.id.slider_fallback_icon_size)
 
         switchEnableTheming.setOnCheckedChangeListener { _, isChecked ->
             if (isUpdatingUI) return@setOnCheckedChangeListener
@@ -189,6 +191,18 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
             }
         }
         sliderIconSize.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                UIHelpers.restartLauncher(requireContext())
+            }
+        })
+
+        sliderFallbackIconSize.addOnChangeListener { _, value, fromUser ->
+            if (fromUser && mService != null) {
+                UIHelpers.pushRemotePref("fallback_icon_size", value.toInt())
+            }
+        }
+        sliderFallbackIconSize.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
             override fun onStartTrackingTouch(slider: Slider) {}
             override fun onStopTrackingTouch(slider: Slider) {
                 UIHelpers.restartLauncher(requireContext())
@@ -614,6 +628,7 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         switchEnableMonetDockFolder.isChecked = isThemeDockFolder
         switchMonetClock.isChecked = isThemeClockWidget
         sliderIconSize.value = iconSize
+        sliderFallbackIconSize.value = prefs.getInt("fallback_icon_size", 150).toFloat()
         sliderDockOpacity.value = dockOpacity
         sliderDockCornerRadius.value = dockRadius
         isUpdatingUI = false

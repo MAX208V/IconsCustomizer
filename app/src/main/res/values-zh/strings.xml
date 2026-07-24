@@ -23,6 +23,7 @@
     <string name="fallback_icon_pack_summary">选择使用哪个图标包的通用兜底图标</string>
     <string name="apply_custom_icon">为特定应用自定义图标</string>
     <string name="icon_size">图标大小</string>
+    <string name="fallback_icon_size">通用兜底图标大小</string>
     <string name="restart_launcher">重启桌面</string>
     <string name="launcher_restarted">桌面已重启</string>
     <string name="error_restarting">重启失败</string>

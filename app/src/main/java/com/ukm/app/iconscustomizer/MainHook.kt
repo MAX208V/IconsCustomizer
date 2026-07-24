@@ -53,6 +53,8 @@ class MainHook : XposedModule() {
     private var dockFolderOpacity = 200
     private var dockCornerRadius = 60
     private var iconSize: Int = 180
+    /** 通用兜底图标大小 */
+    private var fallbackIconSize: Int = 150
 
     /** 缓存：key="pack:component", value=drawableName */
     private val resolvedCache = ConcurrentHashMap<String, String>()
@@ -91,6 +93,7 @@ class MainHook : XposedModule() {
                 }
 
                 iconSize = prefManager?.getInt("icon_size", 180) ?: 180
+                fallbackIconSize = prefManager?.getInt("fallback_icon_size", 150) ?: 150
                 hookLauncher(packageParam)
             }
 
@@ -578,7 +581,7 @@ class MainHook : XposedModule() {
                     launcherContext!!,
                     fbPack,
                     originalIcon,
-                    iconSize
+                    fallbackIconSize
                 )
                 if (fallbackIcon != null) {
                     fallbackIcon.bounds = originalIcon.bounds
