@@ -348,6 +348,16 @@ class IconPickerActivity : AppCompatActivity() {
 
     private fun saveIconChoice(entry: IconEntry) {
         val manualOverrideKey = "custom_icon_${entry.pack}_$componentString"
+        // 清除该组件在其他包的所有旧覆盖，避免 Phase 1 优先返回旧包覆盖
+        for (pkg in iconPackList) {
+            if (pkg == entry.pack) continue
+            val oldKey = "custom_icon_${pkg}_$componentString"
+            UIHelpers.pushRemotePref(oldKey, "" as Any)  // 写空字符串 ≈ 清除
+            getSharedPreferences(MainActivity.PREF_NAME, MODE_PRIVATE).edit(commit = true) {
+                remove(oldKey)
+            }
+        }
+        // 保存新覆盖
         UIHelpers.pushLocalPref(this, manualOverrideKey, entry.drawableName)
         val remoteSaved = UIHelpers.pushRemotePref(manualOverrideKey, entry.drawableName)
         val toastMsg = if (remoteSaved) {
