@@ -47,6 +47,14 @@ class IconPickerActivity : AppCompatActivity() {
         val packLabel: String
     )
 
+    /** Chip/预览数据：包名、标签、匹配的 drawable 名、匹配的图标 */
+    private data class ChipPreviewData(
+        val pkg: String,
+        val label: String,
+        val matchedName: String,
+        val matchedIcon: Drawable?
+    )
+
     private lateinit var appName: String
     private lateinit var componentString: String
     private lateinit var adapter: IconGridAdapter
@@ -180,30 +188,30 @@ class IconPickerActivity : AppCompatActivity() {
                     val label = packLabels[pkg] ?: pkg
                     val map = IconPackHelper.getAppFilterMap(this@IconPickerActivity, pkg)
                     val matchedName = map[componentString] ?: map.entries.firstOrNull {
-                        it.key.startsWith("ComponentInfo{${componentString.substringAfter("{").substringBefore("/")}/")
-                    }?.value
-                    val matchedIcon = if (matchedName != null) {
+                        it.key.startsWith("ComponentInfo{${componentString.substringAfter("{\").substringBefore("/")}/")
+                    }?.value ?: ""
+                    val matchedIcon = if (matchedName.isNotEmpty()) {
                         IconPackHelper.loadIcon(this@IconPickerActivity, pkg, matchedName)
                     } else null
-                    Triple(pkg, label, matchedIcon)
+                    ChipPreviewData(pkg, label, matchedName, matchedIcon)
                 }
             }
 
             buildPackPreview(chipData)
 
             for (idx in chipData.indices) {
-                val (pkg, label, matchedIcon) = chipData[idx]
+                val data = chipData[idx]
                 val chip = Chip(this@IconPickerActivity).apply {
-                    text = label
+                    text = data.label
                     isCheckable = true
                     isChecked = idx == 0
-                    if (matchedIcon != null) {
-                        chipIcon = matchedIcon
+                    if (data.matchedIcon != null) {
+                        chipIcon = data.matchedIcon
                         chipIconSize = dpToPx(22f)
                     }
                     setOnCheckedChangeListener { _, isChecked ->
-                        if (isChecked) activePacks.add(pkg)
-                        else activePacks.remove(pkg)
+                        if (isChecked) activePacks.add(data.pkg)
+                        else activePacks.remove(data.pkg)
                         adapter.filterActivePacks(activePacks)
                     }
                 }
@@ -213,51 +221,63 @@ class IconPickerActivity : AppCompatActivity() {
     }
 
     /** Chip 上方：各图标包匹配该应用的专属图标预览 */
-    private fun buildPackPreview(chipData: List<Triple<String, String, Drawable?>>) {
+    private fun buildPackPreview(chipData: List<ChipPreviewData>) {
         val container = findViewById<LinearLayout>(R.id.packPreviewContainer) ?: return
         val scroll = findViewById<HorizontalScrollView>(R.id.packPreviewScroll) ?: return
         container.removeAllViews()
 
         var hasMatch = false
-        for ((pkg, label, matchedIcon) in chipData) {
-            if (matchedIcon == null) continue
+        for (data in chipData) {
+            if (data.matchedIcon == null) continue
             hasMatch = true
 
-            val item = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = android.view.Gravity.CENTER_HORIZONTAL
-                setPadding(dpToPx(12f).toInt(), dpToPx(8f).toInt(),
-                    dpToPx(12f).toInt(), dpToPx(8f).toInt())
+            val card = com.google.android.material.card.MaterialCardView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    dpToPx(80f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(dpToPx(4f).toInt(), 0, dpToPx(4f).toInt(), 0) }
+                radius = dpToPx(12f)
+                cardElevation = 0f
+                strokeWidth = 0f
+                setCardBackgroundColor(android.content.res.ColorStateList.valueOf(
+                    android.graphics.Color.TRANSPARENT
+                ))
             }
-            item.addView(ImageView(this).apply {
-                setImageDrawable(matchedIcon)
-                val s = dpToPx(48f).toInt()
+
+            val inner = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER
+                setPadding(dpToPx(8f).toInt(), dpToPx(8f).toInt(),
+                    dpToPx(8f).toInt(), dpToPx(8f).toInt())
+            }
+
+            inner.addView(ImageView(this).apply {
+                setImageDrawable(data.matchedIcon)
+                val s = dpToPx(56f).toInt()
                 layoutParams = LinearLayout.LayoutParams(s, s)
                 scaleType = ImageView.ScaleType.FIT_CENTER
             })
-            item.addView(TextView(this).apply {
-                text = appName; textSize = 12f; maxLines = 1
+            inner.addView(TextView(this).apply {
+                text = data.matchedName; textSize = 10f; maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 gravity = android.view.Gravity.CENTER_HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(dpToPx(72f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+                setTextColor(androidx.core.content.ContextCompat.getColorStateList(
+                    this@IconPickerActivity, android.R.color.secondary_text_light
+                ) ?: android.content.res.ColorStateList.valueOf(0x99000000.toInt()))
             })
-            item.addView(TextView(this).apply {
-                text = label; textSize = 10f; alpha = 0.6f; maxLines = 1
+            inner.addView(TextView(this).apply {
+                text = data.label; textSize = 8f; alpha = 0.6f; maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 gravity = android.view.Gravity.CENTER_HORIZONTAL
+                setPadding(dpToPx(6f).toInt(), dpToPx(1f).toInt(), dpToPx(6f).toInt(), dpToPx(1f).toInt())
             })
-            // 点击预览→保存但不关闭，UIHelpers.restartLauncher 会刷新
-            item.setOnClickListener {
-                val matchedName = chipData.firstOrNull { it.first == pkg }?.second ?: return@setOnClickListener
-                val key = "custom_icon_${pkg}_$componentString"
-                UIHelpers.pushLocalPref(this@IconPickerActivity, key, matchedName)
-                UIHelpers.pushRemotePref(key, matchedName)
-                // 刷新当前图标预览
-                lifecycleScope.launch { loadCurrentIcon(findViewById(R.id.currentIconImage)) }
-                Toast.makeText(this@IconPickerActivity,
-                    getString(R.string.icon_set, matchedName, label), Toast.LENGTH_SHORT).show()
+
+            card.addView(inner)
+            card.setOnClickListener {
+                val entry = IconEntry(data.pkg, data.matchedName, data.label)
+                saveIconChoice(entry)
+                UIHelpers.restartLauncher(this@IconPickerActivity)
             }
-            container.addView(item)
+            container.addView(card)
         }
         scroll.visibility = if (hasMatch) View.VISIBLE else View.GONE
     }
