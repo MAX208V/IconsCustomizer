@@ -247,10 +247,10 @@ class IconPickerActivity : AppCompatActivity() {
                 gravity = android.view.Gravity.CENTER_HORIZONTAL
             })
             item.setOnClickListener {
-                val cg = findViewById<ChipGroup>(R.id.packChipGroup)
-                for (i in 0 until cg.childCount) {
-                    (cg.getChildAt(i) as? Chip)?.isChecked = chipData.getOrNull(i)?.first == pkg
-                }
+                // 直接应用该图标包匹配的专属图标
+                val matchedName = chipData.firstOrNull { it.first == pkg }?.second ?: return@setOnClickListener
+                val entry = IconEntry(pkg, matchedName, label)
+                saveIconChoice(entry)
             }
             container.addView(item)
         }
