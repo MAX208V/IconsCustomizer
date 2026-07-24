@@ -201,7 +201,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Icon Size"
+                        android:text="@string/icon_size"
                         android:textSize="16sp" />
 
                     <com.google.android.material.slider.Slider

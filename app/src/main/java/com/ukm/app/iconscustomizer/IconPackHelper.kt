@@ -422,8 +422,12 @@ object IconPackHelper {
      * 当图标包没有提供任何 <iconback>/<iconmask> 或通用 drawable 时使用。
      *
      * 样式：浅色圆角矩形背景 + 居中缩小的原图标
+     * 输出始终为 192x192 的 bitmap，通过调整内边距+图标缩放实现视觉大小变化：
+     *   size=180（基准）→ 12% 内边距 + 65% 图标缩放
+     *   size=250（最大）→ ~8.6% 内边距 + ~90% 图标缩放（显大）
+     *   size=100（最小）→ ~35% 内边距 + ~32% 图标缩放（显小）
      *
-     * @param size 输出图标尺寸（像素），应从应用设置的 icon_size 读取
+     * @param size 视觉大小因子（180=基准，100-250范围）
      */
     fun generateBuiltInFallbackIcon(
         context: Context,
@@ -431,18 +435,31 @@ object IconPackHelper {
         size: Int
     ): Drawable? {
         return try {
-            val bitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
+            // 固定输出画布尺寸，避免 launcher 缩放导致视觉大小不变
+            val outputSize = 192
 
-            // 内边距，使兜底图标不填满整个画布，与其他图标视觉大小一致
-            val pad = size * 0.12f
-            val bgRadius = (size - pad * 2) * 0.2f
+            // 视觉缩放因子：180=基准(12%内边距+0.65原图标缩放)
+            // 小于180→更多内边距、更小图标（显小）
+            // 大于180→更少内边距、更大图标（显大）
+            val defaultSize = 180f
+            val visualFactor = size.toFloat() / defaultSize
+
+            // 内边距反向调节：数值越大内边距越小（图标显大）
+            val basePad = outputSize * 0.12f
+            val pad = (basePad / visualFactor).coerceIn(
+                outputSize * 0.03f,  // min 3% → 图标几乎填满
+                outputSize * 0.35f   // max 35% → 图标很小
+            )
+            val bgRadius = (outputSize - pad * 2) * 0.2f
+
+            val bitmap = createBitmap(outputSize, outputSize, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
 
             // 圆角矩形背景（在内边距区域内绘制）
             val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = android.graphics.Color.parseColor("#18FFFFFF")
             }
-            canvas.drawRoundRect(pad, pad, size.toFloat() - pad, size.toFloat() - pad, bgRadius, bgRadius, bgPaint)
+            canvas.drawRoundRect(pad, pad, outputSize.toFloat() - pad, outputSize.toFloat() - pad, bgRadius, bgRadius, bgPaint)
 
             // 边框
             val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -450,14 +467,14 @@ object IconPackHelper {
                 style = Paint.Style.STROKE
                 strokeWidth = 1f
             }
-            canvas.drawRoundRect(pad, pad, size.toFloat() - pad, size.toFloat() - pad, bgRadius, bgRadius, strokePaint)
+            canvas.drawRoundRect(pad, pad, outputSize.toFloat() - pad, outputSize.toFloat() - pad, bgRadius, bgRadius, strokePaint)
 
             // 居中画缩放后的原图标
             val icon = originalIcon.mutate()
-            val scale = 0.65f
-            icon.setBounds(0, 0, size, size)
+            val iconScale = (0.65f * visualFactor).coerceIn(0.35f, 1.0f)
+            icon.setBounds(0, 0, outputSize, outputSize)
             canvas.save()
-            canvas.scale(scale, scale, size / 2f, size / 2f)
+            canvas.scale(iconScale, iconScale, outputSize / 2f, outputSize / 2f)
             icon.draw(canvas)
             canvas.restore()
 
@@ -476,7 +493,7 @@ object IconPackHelper {
      * 2. 如果图标包没有定义 overlay，尝试直接加载通用 drawable
      * 3. 都失败则使用内置兜底图标（圆角矩形+居中图标）
      *
-     * @param iconSize 输出图标尺寸（像素），从应用设置的 icon_size 读取
+     * @param iconSize 视觉大小因子（180=基准，通过内边距/缩放调整显式尺寸）
      */
     fun getFallbackIcon(
         context: Context,
