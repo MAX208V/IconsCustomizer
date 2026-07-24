@@ -181,6 +181,7 @@ class IconPickerActivity : AppCompatActivity() {
         chipGroup.removeAllViews()
         if (iconPackList.size <= 1) return
         chipGroup.visibility = View.VISIBLE
+        chipGroup.isSingleSelection = true
 
         lifecycleScope.launch {
             val chipData = withContext(Dispatchers.IO) {
@@ -275,7 +276,6 @@ class IconPickerActivity : AppCompatActivity() {
             card.setOnClickListener {
                 val entry = IconEntry(data.pkg, data.matchedName, data.label)
                 saveIconChoice(entry)
-                UIHelpers.restartLauncher(this@IconPickerActivity)
             }
             container.addView(card)
         }
@@ -349,14 +349,17 @@ class IconPickerActivity : AppCompatActivity() {
     private fun saveIconChoice(entry: IconEntry) {
         val manualOverrideKey = "custom_icon_${entry.pack}_$componentString"
         UIHelpers.pushLocalPref(this, manualOverrideKey, entry.drawableName)
-        // 确保远程 pref 已保存，否则回退本地
-        val saved = UIHelpers.pushRemotePref(manualOverrideKey, entry.drawableName)
-        if (!saved) {
-            // 远程保存失败时手动写本地并通知
-            val localPrefs = getSharedPreferences(MainActivity.PREF_NAME, MODE_PRIVATE)
-            localPrefs.edit(commit = true) { putString(manualOverrideKey, entry.drawableName) }
+        val remoteSaved = UIHelpers.pushRemotePref(manualOverrideKey, entry.drawableName)
+        val toastMsg = if (remoteSaved) {
+            getString(R.string.icon_set, entry.drawableName, entry.packLabel)
+        } else {
+            "⚠️ 远程保存失败: ${entry.drawableName}"
         }
-        Toast.makeText(this, getString(R.string.icon_set, entry.drawableName, entry.packLabel), Toast.LENGTH_SHORT).show()
+        if (!remoteSaved && App.mService != null) {
+            Log.w(TAG, "pushRemotePref returned false but mService not null for key=$manualOverrideKey")
+        }
+        Toast.makeText(this, toastMsg, Toast.LENGTH_SHORT).show()
+        UIHelpers.restartLauncher(this)
         finish()
     }
 
@@ -431,7 +434,6 @@ class IconPickerActivity : AppCompatActivity() {
 
             h.itemView.setOnClickListener {
                 saveIconChoice(entry)
-                UIHelpers.restartLauncher(this@IconPickerActivity)
             }
         }
 
