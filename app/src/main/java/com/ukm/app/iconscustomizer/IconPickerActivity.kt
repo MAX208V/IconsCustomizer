@@ -237,7 +237,7 @@ class IconPickerActivity : AppCompatActivity() {
                 ).apply { setMargins(dpToPx(4f).toInt(), 0, dpToPx(4f).toInt(), 0) }
                 radius = dpToPx(12f)
                 cardElevation = 0f
-                strokeWidth = 0f
+                strokeWidth = 0
                 setCardBackgroundColor(android.content.res.ColorStateList.valueOf(
                     android.graphics.Color.TRANSPARENT
                 ))
