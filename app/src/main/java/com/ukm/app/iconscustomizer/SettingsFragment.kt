@@ -613,9 +613,6 @@ class SettingsFragment : Fragment(), App.ServiceStateListener {
         if (view == null) return
 
         if (mService == null) {
-            context?.let {
-                Toast.makeText(it, getString(R.string.service_not_started), Toast.LENGTH_SHORT).show()
-            }
             setUiEnabled(view, false)
             return
         }
