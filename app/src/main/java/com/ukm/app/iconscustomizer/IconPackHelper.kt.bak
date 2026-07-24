@@ -440,19 +440,20 @@ object IconPackHelper {
                 color = android.graphics.Color.parseColor("#18FFFFFF")
             }
             val radius = size * 0.12f
-            canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, bgPaint)
+            val inset = 2f  // 边框向内偏移 2px
+            canvas.drawRoundRect(inset, inset, size.toFloat() - inset, size.toFloat() - inset, radius, radius, bgPaint)
 
-            // 选中边框
+            // 内收的选中边框
             val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = android.graphics.Color.parseColor("#0DFFFFFF")
                 style = Paint.Style.STROKE
-                strokeWidth = 2f
+                strokeWidth = 1.5f
             }
-            canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, strokePaint)
+            canvas.drawRoundRect(inset, inset, size.toFloat() - inset, size.toFloat() - inset, radius, radius, strokePaint)
 
-            // 居中画缩放后的原图标
+            // 居中画缩放后的原图标（略微缩小使整体显小）
             val icon = originalIcon.mutate()
-            val scale = 0.65f
+            val scale = 0.58f
             icon.setBounds(0, 0, size, size)
             canvas.save()
             canvas.scale(scale, scale, size / 2f, size / 2f)

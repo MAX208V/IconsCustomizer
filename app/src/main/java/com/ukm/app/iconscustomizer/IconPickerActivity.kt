@@ -246,11 +246,16 @@ class IconPickerActivity : AppCompatActivity() {
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 gravity = android.view.Gravity.CENTER_HORIZONTAL
             })
+            // 点击预览→保存但不关闭，UIHelpers.restartLauncher 会刷新
             item.setOnClickListener {
-                // 直接应用该图标包匹配的专属图标
                 val matchedName = chipData.firstOrNull { it.first == pkg }?.second ?: return@setOnClickListener
-                val entry = IconEntry(pkg, matchedName, label)
-                saveIconChoice(entry)
+                val key = "custom_icon_${pkg}_$componentString"
+                UIHelpers.pushLocalPref(this@IconPickerActivity, key, matchedName)
+                UIHelpers.pushRemotePref(key, matchedName)
+                // 刷新当前图标预览
+                lifecycleScope.launch { loadCurrentIcon(findViewById(R.id.currentIconImage)) }
+                Toast.makeText(this@IconPickerActivity,
+                    getString(R.string.icon_set, matchedName, label), Toast.LENGTH_SHORT).show()
             }
             container.addView(item)
         }
