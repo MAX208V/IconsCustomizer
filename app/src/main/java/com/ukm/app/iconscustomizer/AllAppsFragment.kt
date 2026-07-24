@@ -156,6 +156,7 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
     override fun onResume() {
         super.onResume()
         if (::adapter.isInitialized) {
+            adapter.clearCache()   // 清除缓存，强制重新加载图标
             adapter.notifyDataSetChanged()
         }
     }
@@ -344,6 +345,11 @@ class AllAppsFragment : Fragment(R.layout.fragment_all_apps) {
 
         fun cleanUp() {
             adapterScope.cancel()
+            memoryCache.evictAll()
+        }
+
+        /** 清除图标缓存，强制下次绑定重新加载 */
+        fun clearCache() {
             memoryCache.evictAll()
         }
     }
