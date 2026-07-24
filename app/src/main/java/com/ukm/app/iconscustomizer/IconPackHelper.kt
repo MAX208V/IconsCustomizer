@@ -446,7 +446,7 @@ object IconPackHelper {
             val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = android.graphics.Color.parseColor("#0DFFFFFF")
                 style = Paint.Style.STROKE
-                strokeWidth = 1.5f
+                strokeWidth = 1f
             }
             canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, strokePaint)
 
