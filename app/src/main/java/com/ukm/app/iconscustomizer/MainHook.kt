@@ -52,7 +52,7 @@ class MainHook : XposedModule() {
     private var isDockEnabled: Boolean = false
     private var dockFolderOpacity = 200
     private var dockCornerRadius = 60
-    private var iconSize: Int = 150
+    private var iconSize: Int = 180
 
     /** 缓存：key="pack:component", value=drawableName */
     private val resolvedCache = ConcurrentHashMap<String, String>()
@@ -90,7 +90,7 @@ class MainHook : XposedModule() {
                     clockWidgetColor = prefManager?.getInt("monet_clock_color", 0) ?: 0
                 }
 
-                iconSize = prefManager?.getInt("icon_size", 150) ?: 150
+                iconSize = prefManager?.getInt("icon_size", 180) ?: 180
                 hookLauncher(packageParam)
             }
 

@@ -433,22 +433,24 @@ object IconPackHelper {
         return try {
             val bitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-            // 圆角矩形背景（使用半透明白色，在任何壁纸上都有柔和效果）
+            // 内边距，使兜底图标不填满整个画布，与其他图标视觉大小一致
+            val pad = size * 0.12f
+            val bgRadius = (size - pad * 2) * 0.2f
+
+            // 圆角矩形背景（在内边距区域内绘制）
             val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = android.graphics.Color.parseColor("#18FFFFFF")
             }
-            val radius = size * 0.2f
-            canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, bgPaint)
+            canvas.drawRoundRect(pad, pad, size.toFloat() - pad, size.toFloat() - pad, bgRadius, bgRadius, bgPaint)
 
-            // 选中边框
+            // 边框
             val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = android.graphics.Color.parseColor("#0DFFFFFF")
                 style = Paint.Style.STROKE
                 strokeWidth = 1f
             }
-            canvas.drawRoundRect(0f, 0f, size.toFloat(), size.toFloat(), radius, radius, strokePaint)
+            canvas.drawRoundRect(pad, pad, size.toFloat() - pad, size.toFloat() - pad, bgRadius, bgRadius, strokePaint)
 
             // 居中画缩放后的原图标
             val icon = originalIcon.mutate()
